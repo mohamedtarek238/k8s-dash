@@ -19,8 +19,25 @@ const podParamsSchema = z.object({
 });
 
 const deploymentParamsSchema = z.object({
-  namespace: z.string().min(1),
-  name: z.string().min(1),
+  namespace: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
+
+const nameParamSchema = z.object({
+  name: z.string().trim().min(1),
+});
+
+const namespacedNameParamsSchema = deploymentParamsSchema;
+
+const detailQuerySchema = z.object({
+  includeRelated: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
+  includeEvents: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
 });
 
 function validate(schema, source = 'query') {
@@ -48,5 +65,9 @@ module.exports = {
   podLogsQuerySchema,
   podParamsSchema,
   deploymentParamsSchema,
+  nameParamSchema,
+  namespacedNameParamsSchema,
+  detailQuerySchema,
   validate,
 };
+

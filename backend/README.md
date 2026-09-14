@@ -101,7 +101,9 @@ All endpoints are prefixed with `/api`.
 | GET | `/api/status` | Backend and Kubernetes connectivity status |
 | GET | `/api/cluster` | Cluster overview (version, counts, health) |
 | GET | `/api/nodes` | List all nodes |
+| GET | `/api/nodes/:name` | Node details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/namespaces` | List all namespaces |
+| GET | `/api/namespaces/:name` | Namespace details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/pods` | List pods (`?namespace=default` optional) |
 | GET | `/api/pods/:namespace/:podName` | Pod details with related events |
 | GET | `/api/pods/:namespace/:podName/logs` | Pod logs (`?container=&tailLines=&previous=`) |
@@ -109,11 +111,21 @@ All endpoints are prefixed with `/api`.
 | GET | `/api/deployments` | List deployments (`?namespace=default` optional) |
 | GET | `/api/deployments/:namespace/:name` | Deployment details |
 | GET | `/api/services` | List services (`?namespace=default` optional) |
+| GET | `/api/services/:namespace/:name` | Service details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/ingresses` | List ingresses (`?namespace=default` optional) |
+| GET | `/api/ingresses/:namespace/:name` | Ingress details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/statefulsets` | List StatefulSets (`?namespace=default` optional) |
+| GET | `/api/statefulsets/:namespace/:name` | StatefulSet details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/daemonsets` | List DaemonSets (`?namespace=default` optional) |
+| GET | `/api/daemonsets/:namespace/:name` | DaemonSet details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/health` | Cluster health score and detected issues |
 | GET | `/api/troubleshooting` | Issues grouped by severity |
+
+### Detail Query Parameters
+
+Detail endpoints accept optional query parameters:
+- `includeRelated=true|false` (default: `false`): Embeds linked resources (e.g., Pods scheduled on a Node, Pods selected by a Service, backend Services for an Ingress, workload counts for a Namespace).
+- `includeEvents=true|false` (default: `false`): Embeds related Kubernetes events, sorted newest first.
 
 ## Example curl commands
 
@@ -126,6 +138,12 @@ curl http://localhost:5000/api/cluster
 
 # Nodes
 curl http://localhost:5000/api/nodes
+curl http://localhost:5000/api/nodes/my-node
+curl "http://localhost:5000/api/nodes/my-node?includeRelated=true&includeEvents=true"
+
+# Namespaces
+curl http://localhost:5000/api/namespaces
+curl http://localhost:5000/api/namespaces/default?includeRelated=true
 
 # Pods in all namespaces
 curl http://localhost:5000/api/pods
@@ -144,6 +162,24 @@ curl http://localhost:5000/api/events
 
 # Deployments
 curl "http://localhost:5000/api/deployments?namespace=default"
+curl http://localhost:5000/api/deployments/default/my-deployment
+
+# Services
+curl http://localhost:5000/api/services
+curl http://localhost:5000/api/services/default/my-service
+curl "http://localhost:5000/api/services/default/my-service?includeRelated=true&includeEvents=true"
+
+# Ingresses
+curl http://localhost:5000/api/ingresses
+curl http://localhost:5000/api/ingresses/default/my-ingress
+
+# StatefulSets
+curl http://localhost:5000/api/statefulsets
+curl "http://localhost:5000/api/statefulsets/default/my-statefulset?includeRelated=true"
+
+# DaemonSets
+curl http://localhost:5000/api/daemonsets
+curl "http://localhost:5000/api/daemonsets/kube-system/my-daemonset?includeRelated=true"
 
 # Cluster health
 curl http://localhost:5000/api/health

@@ -5,30 +5,45 @@ function isKubernetesApiError(err) {
     err &&
     (err.statusCode !== undefined ||
       err.response?.statusCode !== undefined ||
+      err.code !== undefined ||
       err.body !== undefined ||
       err.response?.body !== undefined)
   );
 }
 
 function extractKubernetesError(err) {
-  const statusCode = err.statusCode || err.response?.statusCode || 500;
-  const body = err.body || err.response?.body || {};
+  let parsedBody = err.body || err.response?.body || {};
+  if (typeof parsedBody === 'string') {
+    try {
+      parsedBody = JSON.parse(parsedBody);
+    } catch (_e) {
+      // keep as string
+    }
+  }
+
+  const statusCode =
+    (typeof err.code === 'number' ? err.code : null) ||
+    err.statusCode ||
+    err.response?.statusCode ||
+    (parsedBody && typeof parsedBody === 'object' && parsedBody.code) ||
+    500;
 
   let message = err.message || 'Unknown Kubernetes API error';
-  if (typeof body === 'string') {
-    message = body;
-  } else if (body.message) {
-    message = body.message;
-  } else if (body.reason) {
-    message = body.reason;
+  if (typeof parsedBody === 'string') {
+    message = parsedBody.trim();
+  } else if (parsedBody?.message) {
+    message = parsedBody.message;
+  } else if (parsedBody?.reason) {
+    message = parsedBody.reason;
   }
 
   return {
     statusCode,
     message,
-    details: typeof body === 'object' ? body : { raw: body },
+    details: typeof parsedBody === 'object' ? parsedBody : { raw: parsedBody },
   };
 }
+
 
 function notFoundHandler(req, res) {
   return sendError(res, 404, 'Not Found', `Route ${req.method} ${req.originalUrl} not found`);

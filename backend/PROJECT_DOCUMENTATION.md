@@ -197,7 +197,9 @@ Example response:
 | Method | Path | Query/path parameters | Description |
 |---|---|---|---|
 | GET | `/api/nodes` | None | Lists all nodes with readiness, roles, capacity, allocatable resources, and conditions |
+| GET | `/api/nodes/:name` | Path: `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed node information including roles, architecture, OS, versions, capacity, allocatable, conditions, addresses, taints, CIDRs, node health, and optionally scheduled pods and events |
 | GET | `/api/namespaces` | None | Lists namespaces with status and labels |
+| GET | `/api/namespaces/:name` | Path: `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed namespace view including phase, labels, annotations, finalizers, conditions, and optionally workload resource counts and events |
 | GET | `/api/pods` | Optional `namespace` | Lists pods in one namespace or across all namespaces |
 | GET | `/api/pods/:namespace/:podName` | Required path values | Returns pod details and related events |
 | GET | `/api/pods/:namespace/:podName/logs` | Optional `container`, `tailLines`, `previous` | Returns logs for a pod container |
@@ -216,9 +218,26 @@ Pod log query values:
 | GET | `/api/deployments` | Optional `namespace` | Lists deployments and replica status |
 | GET | `/api/deployments/:namespace/:name` | Required path values | Returns deployment details |
 | GET | `/api/services` | Optional `namespace` | Lists services, addresses, ports, and selectors |
-| GET | `/api/ingresses` | Optional `namespace` | Lists ingress classes, hosts, paths, backends, and load-balancer addresses |
+| GET | `/api/services/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed service information including type, clusterIPs, externalIPs, loadBalancer addresses (ip & hostname), formatted ports (e.g. `port:nodePort/protocol`), selectors, sessionAffinity, traffic policies, safe endpoints, and optionally selected pods and events |
+| GET | `/api/ingresses` | Optional `namespace` | Lists ingresses, classes, hosts, paths, backends, and load-balancer addresses |
+| GET | `/api/ingresses/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed ingress information including ingressClassName, hosts, paths, pathType, backendServiceNames/Ports, TLS configuration, loadBalancer addresses, rules, defaultBackend, and optionally referenced services and events |
 | GET | `/api/statefulsets` | Optional `namespace` | Lists StatefulSets and readiness counts |
+| GET | `/api/statefulsets/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed StatefulSet information including replicas, selector, serviceName, updateStrategy, template metadata, containers, images, ports, volume information (volumes & volumeClaimTemplates), conditions, and optionally selected pods and events |
 | GET | `/api/daemonsets` | Optional `namespace` | Lists DaemonSets and scheduling/readiness counts |
+| GET | `/api/daemonsets/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed DaemonSet information including desired, scheduled, ready, available, unavailable, misscheduled counts, selector, updateStrategy, containers, volumes, conditions, and optionally selected pods and events |
+
+### Resource Details Query Options
+
+The detail endpoints support optional query parameters:
+
+- `includeRelated`: accepts `true` or `false` (default `false`). When `true`, queries and includes related Kubernetes resources without making N+1 API calls:
+  - **Node**: Pods scheduled on this node (`spec.nodeName=name`).
+  - **Service**: Pods matching the service's selector (`selector`).
+  - **Ingress**: Backend Services referenced in the ingress rules.
+  - **StatefulSet**: Pods matching the workload selector.
+  - **DaemonSet**: Pods matching the workload selector.
+  - **Namespace**: Workload counts for pods, services, deployments, statefulsets, and daemonsets in this namespace.
+- `includeEvents`: accepts `true` or `false` (default `false`). When `true`, queries and includes related Kubernetes events mapped and sorted newest first.
 
 ### Namespace filtering
 
@@ -237,9 +256,12 @@ Validation is implemented in `src/middleware/validate.js` with Zod.
 - Namespace query values are optional but cannot be empty.
 - Pod path values `namespace` and `podName` are required and cannot be empty.
 - Deployment path values `namespace` and `name` are required and cannot be empty.
+- Resource detail path values `name` and `namespace` are required, trimmed, and cannot be empty.
+- Detail query parameters `includeRelated` and `includeEvents` accept only `true` or `false` and are strictly validated as boolean enums.
 - Pod log `tailLines` is coerced to an integer and must be between `1` and `10000`.
 - Pod log `previous` accepts only `true` or `false` and is converted to a boolean.
 - Zod's object parsing strips unknown fields from validated query and parameter data.
+
 
 Invalid input returns HTTP 400 with the standard error shape and an `issues` array in `details`.
 
@@ -438,17 +460,29 @@ curl http://localhost:5100/
 curl http://localhost:5100/api/status
 curl http://localhost:5100/api/cluster
 curl http://localhost:5100/api/nodes
+curl http://localhost:5100/api/nodes/my-node
+curl "http://localhost:5100/api/nodes/my-node?includeRelated=true&includeEvents=true"
 curl http://localhost:5100/api/namespaces
+curl http://localhost:5100/api/namespaces/default
+curl "http://localhost:5100/api/namespaces/default?includeRelated=true"
 curl http://localhost:5100/api/pods
 curl "http://localhost:5100/api/pods?namespace=default"
 curl http://localhost:5100/api/pods/default/my-pod
 curl "http://localhost:5100/api/pods/default/my-pod/logs?container=app&tailLines=200"
 curl http://localhost:5100/api/events
 curl "http://localhost:5100/api/deployments?namespace=default"
+curl http://localhost:5100/api/deployments/default/my-deployment
 curl http://localhost:5100/api/services
+curl http://localhost:5100/api/services/default/my-service
+curl "http://localhost:5100/api/services/default/my-service?includeRelated=true&includeEvents=true"
 curl http://localhost:5100/api/ingresses
+curl http://localhost:5100/api/ingresses/default/my-ingress
 curl http://localhost:5100/api/statefulsets
+curl http://localhost:5100/api/statefulsets/default/my-statefulset
+curl "http://localhost:5100/api/statefulsets/default/my-statefulset?includeRelated=true"
 curl http://localhost:5100/api/daemonsets
+curl http://localhost:5100/api/daemonsets/kube-system/my-daemonset
+curl "http://localhost:5100/api/daemonsets/kube-system/my-daemonset?includeRelated=true"
 curl http://localhost:5100/api/health
 curl http://localhost:5100/api/troubleshooting
 ```

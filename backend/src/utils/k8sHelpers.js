@@ -107,6 +107,35 @@ function involvedObjectToString(obj) {
   return `${kind}/${ns}${name}`;
 }
 
+function calculateAge(timestamp) {
+  if (!timestamp) return null;
+  const created = new Date(timestamp).getTime();
+  if (Number.isNaN(created)) return null;
+  const diffMs = Math.max(0, Date.now() - created);
+
+  const seconds = Math.floor(diffMs / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days}d`;
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function formatServicePort(port) {
+  if (!port) return '';
+  const protocol = port.protocol || 'TCP';
+  if (port.nodePort) {
+    return `${port.port}:${port.nodePort}/${protocol}`;
+  }
+  if (port.targetPort && String(port.targetPort) !== String(port.port)) {
+    return `${port.port}:${port.targetPort}/${protocol}`;
+  }
+  return `${port.port}/${protocol}`;
+}
+
 module.exports = {
   getResponseBody,
   parseResourceQuantity,
@@ -119,4 +148,7 @@ module.exports = {
   mapContainers,
   sortEventsByRecency,
   involvedObjectToString,
+  calculateAge,
+  formatServicePort,
 };
+

@@ -33,6 +33,42 @@ async function listEvents(namespace) {
   return sortEventsByRecency(events);
 }
 
+async function getResourceEvents({ kind, namespace, name, uid } = {}) {
+  const { coreV1Api } = initializeKubernetesClients();
+  let rawEvents = [];
+
+  if (namespace) {
+    const response = await coreV1Api.listNamespacedEvent({ namespace });
+    const items = getResponseBody(response).items || [];
+    rawEvents = items.filter((event) => {
+      const obj = event.involvedObject;
+      if (!obj) return false;
+      if (name && obj.name !== name) return false;
+      if (kind && obj.kind?.toLowerCase() !== kind.toLowerCase()) return false;
+      if (uid && obj.uid && obj.uid !== uid) return false;
+      return true;
+    });
+  } else {
+    let fieldSelector;
+    if (kind && name) {
+      fieldSelector = `involvedObject.kind=${kind},involvedObject.name=${name}`;
+    } else if (name) {
+      fieldSelector = `involvedObject.name=${name}`;
+    }
+    const response = await coreV1Api.listEventForAllNamespaces({ fieldSelector });
+    rawEvents = getResponseBody(response).items || [];
+    if (uid) {
+      rawEvents = rawEvents.filter((e) => !e.involvedObject?.uid || e.involvedObject.uid === uid);
+    }
+  }
+
+  const mapped = rawEvents.map(mapEvent);
+  return sortEventsByRecency(mapped);
+}
+
 module.exports = {
+  mapEvent,
   listEvents,
+  getResourceEvents,
 };
+
