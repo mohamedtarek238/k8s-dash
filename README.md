@@ -60,16 +60,27 @@ It connects directly to your active Kubernetes context using your local `kubecon
   - Replicas (desired, available, ready, updated), rollout status, update strategies.
 - **Namespaces**:
   - Namespace lifecycle status, creation timestamps, and label counts.
-- **Networking**:
+- **Networking & Ingress / Kong Gateway**:
   - **Services**: Type (`ClusterIP`, `NodePort`, `LoadBalancer`), cluster IPs, external IPs, and mapped ports.
-  - **Ingresses**: Host rules, load balancer addresses, ingress class, and paths.
+  - **Ingresses**: Host rules, load balancer addresses, ingress class, paths, and Kong controller metadata.
+  - **Kubernetes Gateway API**: Full discovery and management of `Gateway`, `HTTPRoute`, and `GatewayClass` resources (`gateway.networking.k8s.io/v1`).
+  - **Kong Gateway & Plugin Integration**: Automatic detection of Kong Ingress Controller and Kong Gateway Operator, resolution of attached `KongPlugin` CRDs, and automatic credential masking (`[REDACTED]`).
+  - **Visual Routing Topology**: Real-time interactive pipeline diagrams displaying `Client -> Gateway -> Ingress/HTTPRoute -> Service -> Pods` with live pod health status.
 - **Workloads (StatefulSets & DaemonSets)**:
   - Full API support for StatefulSets and DaemonSets with linked pods and events.
+
+### 📄 Live YAML Viewer
+- **Dynamic Manifest Generation**: View current Kubernetes objects directly from the control plane formatted as standard YAML via `js-yaml`.
+- **Supported Resources**: Pods, Deployments, Nodes, Namespaces, Services, Ingresses, HTTPRoutes, Gateways, GatewayClasses, KongPlugins, StatefulSets, and DaemonSets.
+- **Field Fidelity**: Complete manifest preservation including `metadata`, `spec`, `status`, `labels`, `annotations`, `ownerReferences`, `finalizers`, and `conditions`.
+- **Developer Convenience**: Interactive slide-out drawer tab with one-click "Copy YAML" and live "Refresh" buttons.
+- **Read-Only Security**: Strictly inspection-only with zero mutation endpoints (no apply, update, patch, or delete). Sensitive resources like `secrets` are blocked.
 
 ### 🔐 Security & Simplicity
 - **Zero Hardcoded Secrets**: Uses official `@kubernetes/client-node` loader (`~/.kube/config` or `%USERPROFILE%\.kube\config`).
 - **Strict Validation**: All route parameters and query arguments are strictly validated with [Zod](https://zod.dev/).
 - **Safe CORS & Headers**: Configured with [Helmet](https://helmetjs.github.io/) and configurable CORS origin.
+
 
 ### 🎨 Clean, Responsive UI
 - Dark and Light themes with persistent state.
@@ -302,12 +313,40 @@ All backend API routes are prefixed with `/api`.
 | `GET` | `/api/deployments/:namespace/:name`| — | Deployment rollout details and update strategy |
 | `GET` | `/api/services` | `?namespace=` | List services and exposed ports |
 | `GET` | `/api/services/:namespace/:name` | `?includeRelated=&includeEvents=` | Service details, target pods, and endpoints |
-| `GET` | `/api/ingresses` | `?namespace=` | List ingress resources and hosts |
-| `GET` | `/api/ingresses/:namespace/:name` | `?includeRelated=&includeEvents=` | Ingress rules, backend services, and addresses |
+| `GET` | `/api/ingresses` | `?namespace=` | List ingress resources, hosts, and Kong controller info |
+| `GET` | `/api/ingresses/:namespace/:name` | `?includeRelated=&includeEvents=` | Ingress rules, attached Kong plugins, routing flow, and backends |
+| `GET` | `/api/http-routes` | `?namespace=` | List Gateway API HTTPRoutes (`gateway.networking.k8s.io/v1`) |
+| `GET` | `/api/http-routes/:namespace/:name` | `?includeRelated=&includeEvents=` | HTTPRoute rules, matches, Kong plugins, and backend pods |
+| `GET` | `/api/gateways` | `?namespace=` | List Gateway API Gateways |
+| `GET` | `/api/gateways/:namespace/:name` | `?includeRelated=&includeEvents=` | Gateway listeners, addresses, status, and attached HTTPRoutes |
+| `GET` | `/api/gateway-classes` | — | List GatewayClasses |
+| `GET` | `/api/gateway-classes/:name` | — | GatewayClass details and controller |
 | `GET` | `/api/statefulsets` | `?namespace=` | List StatefulSets |
 | `GET` | `/api/statefulsets/:namespace/:name` | `?includeRelated=&includeEvents=` | StatefulSet details and managed pods |
 | `GET` | `/api/daemonsets` | `?namespace=` | List DaemonSets |
 | `GET` | `/api/daemonsets/:namespace/:name` | `?includeRelated=&includeEvents=` | DaemonSet details and scheduled pods |
+
+### YAML Viewer Endpoints
+
+Both **resource-specific** and **generic** YAML endpoints are provided. They are 100% read-only and return dynamically generated YAML manifests directly from the live Kubernetes control plane.
+
+| Method | Endpoint | Scope | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/pods/:namespace/:podName/yaml` | Namespaced | Pod raw YAML manifest |
+| `GET` | `/api/deployments/:namespace/:name/yaml` | Namespaced | Deployment raw YAML manifest |
+| `GET` | `/api/services/:namespace/:name/yaml` | Namespaced | Service raw YAML manifest |
+| `GET` | `/api/ingresses/:namespace/:name/yaml` | Namespaced | Ingress raw YAML manifest |
+| `GET` | `/api/http-routes/:namespace/:name/yaml` | Namespaced | Gateway API HTTPRoute raw YAML manifest |
+| `GET` | `/api/gateways/:namespace/:name/yaml` | Namespaced | Gateway API Gateway raw YAML manifest |
+| `GET` | `/api/gateway-classes/:name/yaml` | Cluster | Gateway API GatewayClass raw YAML manifest |
+| `GET` | `/api/statefulsets/:namespace/:name/yaml` | Namespaced | StatefulSet raw YAML manifest |
+| `GET` | `/api/daemonsets/:namespace/:name/yaml` | Namespaced | DaemonSet raw YAML manifest |
+| `GET` | `/api/namespaces/:name/yaml` | Cluster | Namespace raw YAML manifest |
+| `GET` | `/api/nodes/:name/yaml` | Cluster | Node raw YAML manifest |
+| `GET` | `/api/resources/:resourceType/:namespace/:name/yaml` | Namespaced | Generic YAML for namespaced resources (`pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `kongplugins`, `statefulsets`, `daemonsets`) |
+| `GET` | `/api/resources/:resourceType/:name/yaml` | Cluster | Generic YAML for cluster resources (`nodes`, `namespaces`, `gatewayclasses`) |
+
+> **Security & Validation**: Supported resource types are strictly whitelisted: `pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `gatewayclasses`, `kongplugins`, `statefulsets`, `daemonsets`, `namespaces`, and `nodes`. Requests for sensitive types like `secrets` or unrecognized names return `400 Bad Request`.
 
 ### Query Parameters & Filters
 
@@ -336,7 +375,32 @@ curl "http://localhost:5100/api/pods/default/my-app/logs?tailLines=50"
 
 # 5. Get service details with linked pods
 curl "http://localhost:5100/api/services/default/my-service?includeRelated=true"
+
+# 6. Fetch raw YAML for a Pod (resource-specific route)
+curl http://localhost:5100/api/pods/default/my-pod/yaml
+
+# 7. Fetch raw YAML via generic route (namespaced)
+curl http://localhost:5100/api/resources/deployments/default/my-deployment/yaml
+
+# 8. Fetch raw YAML via generic route (cluster-scoped)
+curl http://localhost:5100/api/resources/nodes/minikube/yaml
 ```
+
+#### YAML API Response Envelope
+
+```json
+{
+  "success": true,
+  "data": {
+    "yaml": "apiVersion: v1\nkind: Pod\nmetadata:\n  name: my-pod\n  namespace: default\n...",
+    "kind": "Pod",
+    "apiVersion": "v1",
+    "name": "my-pod",
+    "namespace": "default"
+  }
+}
+```
+
 
 #### Standard API Response Envelope
 

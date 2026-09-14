@@ -1,4 +1,5 @@
 const namespacesService = require('../services/kubernetes/namespaces.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getNamespaces(_req, res) {
@@ -13,8 +14,16 @@ async function getNamespaceDetails(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getNamespaceYaml(req, res) {
+  const { name } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('namespaces', { name });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getNamespaces,
   getNamespaceDetails,
+  getNamespaceYaml,
 };
+
 

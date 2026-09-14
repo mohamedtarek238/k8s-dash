@@ -1,28 +1,24 @@
 const express = require('express');
-const servicesController = require('../controllers/services.controller');
+const gatewayController = require('../controllers/gateway.controller');
 const { asyncHandler } = require('../utils/asyncHandler');
 const {
   validate,
   namespaceQuerySchema,
   namespacedNameParamsSchema,
-  detailQuerySchema,
 } = require('../middleware/validate');
 
 const router = express.Router();
 
-router.get('/', validate(namespaceQuerySchema), asyncHandler(servicesController.getServices));
+router.get('/', validate(namespaceQuerySchema), asyncHandler(gatewayController.getGateways));
 router.get(
   '/:namespace/:name/yaml',
   validate(namespacedNameParamsSchema, 'params'),
-  asyncHandler(servicesController.getServiceYaml)
+  asyncHandler(gatewayController.getGatewayYaml)
 );
 router.get(
   '/:namespace/:name',
   validate(namespacedNameParamsSchema, 'params'),
-  validate(detailQuerySchema),
-  asyncHandler(servicesController.getServiceDetails)
+  asyncHandler(gatewayController.getGatewayDetails)
 );
 
 module.exports = router;
-
-

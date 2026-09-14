@@ -1,4 +1,5 @@
 const nodesService = require('../services/kubernetes/nodes.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getNodes(_req, res) {
@@ -13,8 +14,16 @@ async function getNodeDetails(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getNodeYaml(req, res) {
+  const { name } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('nodes', { name });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getNodes,
   getNodeDetails,
+  getNodeYaml,
 };
+
 

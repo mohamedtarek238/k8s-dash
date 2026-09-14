@@ -1,4 +1,5 @@
 const statefulSetsService = require('../services/kubernetes/statefulsets.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getStatefulSets(req, res) {
@@ -14,8 +15,16 @@ async function getStatefulSetDetails(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getStatefulSetYaml(req, res) {
+  const { namespace, name } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('statefulsets', { namespace, name });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getStatefulSets,
   getStatefulSetDetails,
+  getStatefulSetYaml,
 };
+
 

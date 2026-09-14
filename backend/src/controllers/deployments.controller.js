@@ -1,4 +1,5 @@
 const deploymentsService = require('../services/kubernetes/deployments.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getDeployments(req, res) {
@@ -13,7 +14,15 @@ async function getDeploymentDetails(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getDeploymentYaml(req, res) {
+  const { namespace, name } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('deployments', { namespace, name });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getDeployments,
   getDeploymentDetails,
+  getDeploymentYaml,
 };
+

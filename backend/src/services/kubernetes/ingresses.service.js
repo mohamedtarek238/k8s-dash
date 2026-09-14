@@ -1,8 +1,15 @@
 const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody, calculateAge } = require('../../utils/k8sHelpers');
 const { getResourceEvents } = require('./events.service');
+const {
+  extractKongAnnotations,
+  detectController,
+  resolveKongPlugins,
+  buildRoutingGraph,
+  getIngressClassControllerMap,
+} = require('./kong.service');
 
-function mapIngress(ingress) {
+function mapIngress(ingress, ingressClassMap = {}) {
   const rules = ingress.spec?.rules || [];
   const hosts = [];
   const paths = [];
@@ -16,8 +23,8 @@ function mapIngress(ingress) {
     for (const httpPath of rule.http?.paths || []) {
       paths.push({
         host: rule.host || '*',
-        path: httpPath.path,
-        pathType: httpPath.pathType,
+        path: httpPath.path || '/',
+        pathType: httpPath.pathType || 'ImplementationSpecific',
       });
 
       const serviceName =
@@ -32,7 +39,7 @@ function mapIngress(ingress) {
       if (serviceName) {
         backendServices.push({
           host: rule.host || '*',
-          path: httpPath.path,
+          path: httpPath.path || '/',
           serviceName,
           servicePort,
         });
@@ -40,25 +47,46 @@ function mapIngress(ingress) {
     }
   }
 
+  const annotations = ingress.metadata?.annotations || {};
+  const ingressClassName =
+    ingress.spec?.ingressClassName ||
+    annotations['kubernetes.io/ingress.class'] ||
+    null;
+
+  const controller = detectController({ ingressClassName, annotations }, ingressClassMap);
+  const kongAnnotations = extractKongAnnotations(annotations);
+
+  const addresses = (ingress.status?.loadBalancer?.ingress || []).map((ing) => ({
+    ip: ing.ip || null,
+    hostname: ing.hostname || null,
+  }));
+
   return {
     name: ingress.metadata.name,
     namespace: ingress.metadata.namespace,
     hosts,
     paths,
     backendServices,
-    ingressClass:
-      ingress.spec?.ingressClassName ||
-      ingress.metadata.annotations?.['kubernetes.io/ingress.class'] ||
-      null,
-    addresses: (ingress.status?.loadBalancer?.ingress || []).map((ing) => ({
-      ip: ing.ip,
-      hostname: ing.hostname,
-    })),
+    ingressClass: ingressClassName,
+    ingressClassName,
+    controller,
+    kong: {
+      hasKongAnnotations: kongAnnotations.hasKongAnnotations,
+      plugins: kongAnnotations.plugins,
+      annotations: kongAnnotations.raw,
+      stripPath: kongAnnotations.stripPath,
+      preserveHost: kongAnnotations.preserveHost,
+      protocols: kongAnnotations.protocols,
+      methods: kongAnnotations.methods,
+    },
+    addresses,
+    loadBalancerAddresses: addresses,
     creationTimestamp: ingress.metadata.creationTimestamp,
+    age: calculateAge(ingress.metadata.creationTimestamp),
   };
 }
 
-function mapIngressDetails(ingress, { relatedServices, events } = {}) {
+function mapIngressDetails(ingress, { relatedServices, events, resolvedPlugins = [], routing = null, ingressClassMap = {} } = {}) {
   const rules = ingress.spec?.rules || [];
   const hosts = [];
   const paths = [];
@@ -133,6 +161,15 @@ function mapIngressDetails(ingress, { relatedServices, events } = {}) {
     hostname: ing.hostname || null,
   }));
 
+  const annotations = ingress.metadata?.annotations || {};
+  const ingressClassName =
+    ingress.spec?.ingressClassName ||
+    annotations['kubernetes.io/ingress.class'] ||
+    null;
+
+  const controller = detectController({ ingressClassName, annotations }, ingressClassMap);
+  const kongAnnotations = extractKongAnnotations(annotations);
+
   const data = {
     name: ingress.metadata.name,
     namespace: ingress.metadata.namespace,
@@ -140,10 +177,9 @@ function mapIngressDetails(ingress, { relatedServices, events } = {}) {
     resourceVersion: ingress.metadata.resourceVersion,
     creationTimestamp: ingress.metadata.creationTimestamp,
     age: calculateAge(ingress.metadata.creationTimestamp),
-    ingressClassName:
-      ingress.spec?.ingressClassName ||
-      ingress.metadata.annotations?.['kubernetes.io/ingress.class'] ||
-      null,
+    ingressClass: ingressClassName,
+    ingressClassName,
+    controller,
     hosts,
     paths,
     pathType: paths[0]?.pathType || null,
@@ -152,10 +188,27 @@ function mapIngressDetails(ingress, { relatedServices, events } = {}) {
     backendServices,
     tls,
     loadBalancerAddresses,
+    addresses: loadBalancerAddresses,
     rules,
     defaultBackend,
     labels: ingress.metadata.labels || {},
-    annotations: ingress.metadata.annotations || {},
+    annotations,
+    kong: {
+      hasKongAnnotations: kongAnnotations.hasKongAnnotations,
+      plugins: kongAnnotations.plugins,
+      resolvedPlugins,
+      annotations: kongAnnotations.raw,
+      stripPath: kongAnnotations.stripPath,
+      preserveHost: kongAnnotations.preserveHost,
+      protocols: kongAnnotations.protocols,
+      methods: kongAnnotations.methods,
+      headers: kongAnnotations.headers,
+      regexPriority: kongAnnotations.regexPriority,
+      httpsRedirectStatusCode: kongAnnotations.httpsRedirectStatusCode,
+      snis: kongAnnotations.snis,
+      hostAliases: kongAnnotations.hostAliases,
+    },
+    routing,
     status: ingress.status || {},
     conditions: ingress.status?.conditions || [],
   };
@@ -174,31 +227,75 @@ function mapIngressDetails(ingress, { relatedServices, events } = {}) {
   return data;
 }
 
-async function listIngresses(namespace) {
+async function listIngresses(namespace, { includeKong = false } = {}) {
   const { networkingV1Api } = initializeKubernetesClients();
+  const ingressClassMap = await getIngressClassControllerMap();
 
   const response = namespace
     ? await networkingV1Api.listNamespacedIngress({ namespace })
     : await networkingV1Api.listIngressForAllNamespaces();
 
-  return (getResponseBody(response).items || []).map(mapIngress);
+  const items = getResponseBody(response).items || [];
+  return items.map((ing) => mapIngress(ing, ingressClassMap));
 }
 
-async function getIngressDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}) {
+async function getIngressDetails(namespace, name, { includeRelated = false, includeEvents = false, includeKong = true } = {}) {
   const { networkingV1Api, coreV1Api } = initializeKubernetesClients();
+  const ingressClassMap = await getIngressClassControllerMap();
 
   const response = await networkingV1Api.readNamespacedIngress({ name, namespace });
   const ingress = getResponseBody(response);
 
-  let relatedServices;
-  if (includeRelated) {
-    const serviceNames = new Set();
-    for (const rule of ingress.spec?.rules || []) {
-      for (const httpPath of rule.http?.paths || []) {
-        const sName = httpPath.backend?.service?.name || httpPath.backend?.resource?.name;
-        if (sName) serviceNames.add(sName);
+  const annotations = ingress.metadata?.annotations || {};
+  const kongAnnotations = extractKongAnnotations(annotations);
+
+  let resolvedPlugins = [];
+  if (includeKong && kongAnnotations.plugins.length > 0) {
+    resolvedPlugins = await resolveKongPlugins(namespace, kongAnnotations.plugins);
+  }
+
+  const ingressClassName =
+    ingress.spec?.ingressClassName ||
+    annotations['kubernetes.io/ingress.class'] ||
+    null;
+  const controller = detectController({ ingressClassName, annotations }, ingressClassMap);
+
+  const rules = ingress.spec?.rules || [];
+  const backendServices = [];
+  const hosts = [];
+  const paths = [];
+
+  for (const rule of rules) {
+    if (rule.host && !hosts.includes(rule.host)) hosts.push(rule.host);
+    for (const p of rule.http?.paths || []) {
+      paths.push(p.path || '/');
+      const sName = p.backend?.service?.name || p.backend?.resource?.name;
+      const sPort = p.backend?.service?.port?.number ?? p.backend?.service?.port?.name ?? null;
+      if (sName) {
+        backendServices.push({
+          serviceName: sName,
+          servicePort: sPort,
+          namespace,
+        });
       }
     }
+  }
+
+  const routing = await buildRoutingGraph({
+    resourceType: 'Ingress',
+    name,
+    namespace,
+    hosts,
+    paths,
+    backendServices,
+    controller,
+    plugins: resolvedPlugins,
+    resolvePods: true,
+  });
+
+  let relatedServices;
+  if (includeRelated) {
+    const serviceNames = new Set(backendServices.map((b) => b.serviceName));
     if (ingress.spec?.defaultBackend?.service?.name) {
       serviceNames.add(ingress.spec.defaultBackend.service.name);
     }
@@ -232,11 +329,16 @@ async function getIngressDetails(namespace, name, { includeRelated = false, incl
     events = await getResourceEvents({ kind: 'Ingress', namespace, name, uid: ingress.metadata?.uid });
   }
 
-  return mapIngressDetails(ingress, { relatedServices, events });
+  return mapIngressDetails(ingress, {
+    relatedServices,
+    events,
+    resolvedPlugins,
+    routing,
+    ingressClassMap,
+  });
 }
 
 module.exports = {
   listIngresses,
   getIngressDetails,
 };
-

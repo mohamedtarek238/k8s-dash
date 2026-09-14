@@ -12,6 +12,11 @@ const router = express.Router();
 
 router.get('/', validate(namespaceQuerySchema), asyncHandler(daemonSetsController.getDaemonSets));
 router.get(
+  '/:namespace/:name/yaml',
+  validate(namespacedNameParamsSchema, 'params'),
+  asyncHandler(daemonSetsController.getDaemonSetYaml)
+);
+router.get(
   '/:namespace/:name',
   validate(namespacedNameParamsSchema, 'params'),
   validate(detailQuerySchema),
@@ -19,4 +24,5 @@ router.get(
 );
 
 module.exports = router;
+
 

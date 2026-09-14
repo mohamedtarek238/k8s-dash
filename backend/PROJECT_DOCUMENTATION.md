@@ -219,8 +219,14 @@ Pod log query values:
 | GET | `/api/deployments/:namespace/:name` | Required path values | Returns deployment details |
 | GET | `/api/services` | Optional `namespace` | Lists services, addresses, ports, and selectors |
 | GET | `/api/services/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed service information including type, clusterIPs, externalIPs, loadBalancer addresses (ip & hostname), formatted ports (e.g. `port:nodePort/protocol`), selectors, sessionAffinity, traffic policies, safe endpoints, and optionally selected pods and events |
-| GET | `/api/ingresses` | Optional `namespace` | Lists ingresses, classes, hosts, paths, backends, and load-balancer addresses |
-| GET | `/api/ingresses/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed ingress information including ingressClassName, hosts, paths, pathType, backendServiceNames/Ports, TLS configuration, loadBalancer addresses, rules, defaultBackend, and optionally referenced services and events |
+| GET | `/api/ingresses` | Optional `namespace` | Lists ingresses, classes, hosts, paths, backends, controller type, and load-balancer addresses |
+| GET | `/api/ingresses/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed ingress information including Kong annotations, attached Kong plugins (with sanitized config), visual routing chain to backend pods, and optionally referenced services and events |
+| GET | `/api/gateways` | Optional `namespace` | Lists Kubernetes Gateway API gateways (`gateway.networking.k8s.io/v1`) |
+| GET | `/api/gateways/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns gateway details including listeners, addresses, conditions, and attached HTTPRoutes |
+| GET | `/api/gateway-classes` | None | Lists GatewayClasses |
+| GET | `/api/gateway-classes/:name` | Path: `name` | Returns GatewayClass details and controller name |
+| GET | `/api/http-routes` | Optional `namespace` | Lists Gateway API HTTPRoutes with parent gateways, hostnames, and routing rules |
+| GET | `/api/http-routes/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns HTTPRoute details, Kong plugin attachments, rules, matches, filters, backend refs, resolved pods, and visual routing chain |
 | GET | `/api/statefulsets` | Optional `namespace` | Lists StatefulSets and readiness counts |
 | GET | `/api/statefulsets/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed StatefulSet information including replicas, selector, serviceName, updateStrategy, template metadata, containers, images, ports, volume information (volumes & volumeClaimTemplates), conditions, and optionally selected pods and events |
 | GET | `/api/daemonsets` | Optional `namespace` | Lists DaemonSets and scheduling/readiness counts |
@@ -334,6 +340,7 @@ backend/
     │   ├── daemonsets.controller.js
     │   ├── deployments.controller.js
     │   ├── events.controller.js
+    │   ├── gateway.controller.js
     │   ├── health.controller.js
     │   ├── ingresses.controller.js
     │   ├── namespaces.controller.js
@@ -342,7 +349,8 @@ backend/
     │   ├── services.controller.js
     │   ├── statefulsets.controller.js
     │   ├── status.controller.js
-    │   └── troubleshooting.controller.js
+    │   ├── troubleshooting.controller.js
+    │   └── yaml.controller.js
     ├── middleware/
     │   ├── errorHandler.js
     │   └── validate.js
@@ -351,6 +359,7 @@ backend/
     │   ├── daemonsets.routes.js
     │   ├── deployments.routes.js
     │   ├── events.routes.js
+    │   ├── gateway.routes.js
     │   ├── health.routes.js
     │   ├── index.js
     │   ├── ingresses.routes.js
@@ -360,19 +369,23 @@ backend/
     │   ├── services.routes.js
     │   ├── statefulsets.routes.js
     │   ├── status.routes.js
-    │   └── troubleshooting.routes.js
+    │   ├── troubleshooting.routes.js
+    │   └── yaml.routes.js
     ├── services/kubernetes/
     │   ├── cluster.service.js
     │   ├── daemonsets.service.js
     │   ├── deployments.service.js
     │   ├── diagnostics.service.js
     │   ├── events.service.js
+    │   ├── gateway.service.js
     │   ├── ingresses.service.js
+    │   ├── kong.service.js
     │   ├── namespaces.service.js
     │   ├── nodes.service.js
     │   ├── pods.service.js
     │   ├── services.service.js
-    │   └── statefulsets.service.js
+    │   ├── statefulsets.service.js
+    │   └── yaml.service.js
     └── utils/
         ├── asyncHandler.js
         ├── k8sHelpers.js
@@ -392,15 +405,17 @@ backend/
 Controllers are thin adapters between Express and Kubernetes services:
 
 - `cluster.controller.js`: Cluster overview.
-- `nodes.controller.js`: Node list.
-- `namespaces.controller.js`: Namespace list.
+- `nodes.controller.js`: Node list and details.
+- `namespaces.controller.js`: Namespace list and details.
 - `pods.controller.js`: Pod list, details, and logs.
 - `events.controller.js`: Event list.
 - `deployments.controller.js`: Deployment list and details.
-- `services.controller.js`: Service list.
-- `ingresses.controller.js`: Ingress list.
-- `statefulsets.controller.js`: StatefulSet list.
-- `daemonsets.controller.js`: DaemonSet list.
+- `services.controller.js`: Service list and details.
+- `ingresses.controller.js`: Ingress list and details with Kong plugin and routing chain resolution.
+- `gateway.controller.js`: Gateway, GatewayClass, and HTTPRoute list and detail endpoints.
+- `statefulsets.controller.js`: StatefulSet list and details.
+- `daemonsets.controller.js`: DaemonSet list and details.
+- `yaml.controller.js`: Resource-specific and generic YAML manifest retrieval.
 - `status.controller.js`: Backend and Kubernetes connectivity status.
 - `health.controller.js`: Health score and detected issues.
 - `troubleshooting.controller.js`: Severity-grouped diagnostic report.
@@ -414,7 +429,10 @@ Controllers are thin adapters between Express and Kubernetes services:
 - `events.service.js`: Reads namespaced or all-namespace events and sorts them newest first.
 - `deployments.service.js`: Maps deployment selectors, replica counts, and status.
 - `services.service.js`: Maps service type, IPs, ports, and selectors.
-- `ingresses.service.js`: Maps hosts, paths, backend services, ingress class, and addresses.
+- `ingresses.service.js`: Maps hosts, paths, backend services, ingress class, addresses, Kong annotations, attached plugins, and visual routing chain.
+- `gateway.service.js`: Maps Kubernetes Gateway API resources (`Gateway`, `GatewayClass`, `HTTPRoute`, `ReferenceGrant`) via `@kubernetes/client-node` CustomObjectsApi.
+- `kong.service.js`: Inspects Kong controller deployment, queries Kong CRDs (`KongPlugin`, `KongIngress`), extracts Kong annotations, sanitizes sensitive plugin configuration, and builds multi-tier visual routing graphs (`Client -> Gateway/Ingress -> Service -> Pods`).
+- `yaml.service.js`: Generates clean, read-only YAML manifests directly from live Kubernetes objects for standard resources and Gateway/Kong CRDs.
 - `statefulsets.service.js`: Maps replica and readiness information.
 - `daemonsets.service.js`: Maps desired, scheduled, available, and ready counts.
 - `diagnostics.service.js`: Detects node, pod, container, restart, image, OOM, and deployment availability issues.
@@ -436,6 +454,9 @@ The backend uses read operations for Kubernetes resources. The kubeconfig identi
 - Deployments
 - Services
 - Ingresses
+- Gateways and GatewayClasses (`gateway.networking.k8s.io`)
+- HTTPRoutes and ReferenceGrants (`gateway.networking.k8s.io`)
+- Kong CRDs (`configuration.konghq.com`, e.g., `KongPlugin`)
 - StatefulSets
 - DaemonSets
 - Cluster version information
@@ -447,6 +468,9 @@ kubectl auth can-i list pods --all-namespaces
 kubectl auth can-i get pods --all-namespaces
 kubectl auth can-i get pods --subresource=log --all-namespaces
 kubectl auth can-i list deployments --all-namespaces
+kubectl auth can-i list httproutes.gateway.networking.k8s.io --all-namespaces
+kubectl auth can-i list gateways.gateway.networking.k8s.io --all-namespaces
+kubectl auth can-i list kongplugins.configuration.konghq.com --all-namespaces
 ```
 
 A Kubernetes 403 response usually means the selected kubeconfig user or service account needs additional RBAC permissions.
@@ -477,6 +501,13 @@ curl http://localhost:5100/api/services/default/my-service
 curl "http://localhost:5100/api/services/default/my-service?includeRelated=true&includeEvents=true"
 curl http://localhost:5100/api/ingresses
 curl http://localhost:5100/api/ingresses/default/my-ingress
+curl http://localhost:5100/api/http-routes
+curl http://localhost:5100/api/http-routes/kong-system/my-route
+curl "http://localhost:5100/api/http-routes/kong-system/my-route?includeRelated=true"
+curl http://localhost:5100/api/gateways
+curl http://localhost:5100/api/gateways/kong-system/kong-gateway
+curl http://localhost:5100/api/gateway-classes
+curl http://localhost:5100/api/gateway-classes/kong-class
 curl http://localhost:5100/api/statefulsets
 curl http://localhost:5100/api/statefulsets/default/my-statefulset
 curl "http://localhost:5100/api/statefulsets/default/my-statefulset?includeRelated=true"
@@ -538,6 +569,108 @@ Make sure the cluster API server is reachable from the local machine and that th
 - Kubeconfig initialization is eager, so a cluster configuration failure prevents the server from starting rather than allowing a degraded status endpoint.
 - The API does not currently expose OpenAPI/Swagger metadata.
 
-## 18. License
+## 18. YAML Viewer Feature & Endpoints
+
+### 18.1 Overview
+The YAML Viewer provides developer inspection of live Kubernetes resources. Rather than returning trimmed or transformed dashboard summaries, it fetches the actual object from the control plane and serializes it to formatted YAML using `js-yaml`.
+
+The feature is strictly **read-only**:
+- No write, update, patch, delete, or apply endpoints exist.
+- Secrets are explicitly excluded from the supported whitelist to prevent credential leakage.
+
+### 18.2 Supported Resources
+- `pods` (namespaced)
+- `deployments` (namespaced)
+- `services` (namespaced)
+- `ingresses` (namespaced)
+- `httproutes` (namespaced - Gateway API)
+- `gateways` (namespaced - Gateway API)
+- `gatewayclasses` (cluster-scoped - Gateway API)
+- `kongplugins` (namespaced - Kong CRD)
+- `statefulsets` (namespaced)
+- `daemonsets` (namespaced)
+- `namespaces` (cluster-scoped)
+- `nodes` (cluster-scoped)
+
+### 18.3 Endpoints
+Both resource-specific and generic routes are mounted:
+- **Resource-Specific**:
+  - `GET /api/pods/:namespace/:podName/yaml`
+  - `GET /api/deployments/:namespace/:name/yaml`
+  - `GET /api/services/:namespace/:name/yaml`
+  - `GET /api/ingresses/:namespace/:name/yaml`
+  - `GET /api/http-routes/:namespace/:name/yaml`
+  - `GET /api/gateways/:namespace/:name/yaml`
+  - `GET /api/gateway-classes/:name/yaml`
+  - `GET /api/statefulsets/:namespace/:name/yaml`
+  - `GET /api/daemonsets/:namespace/:name/yaml`
+  - `GET /api/namespaces/:name/yaml`
+  - `GET /api/nodes/:name/yaml`
+- **Generic**:
+  - `GET /api/resources/:resourceType/:namespace/:name/yaml` (namespaced: `pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `kongplugins`, `statefulsets`, `daemonsets`)
+  - `GET /api/resources/:resourceType/:name/yaml` (cluster-scoped: `nodes`, `namespaces`, `gatewayclasses`)
+
+### 18.4 Serialization & Object Normalization
+1. **Single API Call**: A single `@kubernetes/client-node` read request is dispatched (e.g., `readNamespacedPod`, `readNode`, or `getNamespacedCustomObject`). No related resources, events, or metrics are fetched.
+2. **POJO Conversion**: The client model instance is converted to a plain JavaScript object via `JSON.parse(JSON.stringify(raw))` to prevent `js-yaml` constructor serialization exceptions.
+3. **TypeMeta Normalization**: In `@kubernetes/client-node`, `apiVersion` and `kind` are guaranteed at the top of the object (`v1` / `Pod`, `apps/v1` / `Deployment`, `gateway.networking.k8s.io/v1` / `HTTPRoute`, etc.) followed by `metadata`, `spec`, `status`, and all other fields.
+4. **Serialization**: Produced using `yaml.dump(normalized, { indent: 2, lineWidth: -1, noRefs: true, sortKeys: false })`.
+
+### 18.5 Error Behaviors
+- **400 Bad Request**: Invalid parameters, wrong scoping (e.g. providing a namespace for a cluster resource), or unsupported resource types (e.g. `secrets`).
+- **404 Not Found**: Target resource does not exist in the cluster.
+- **403 Forbidden**: Active kubeconfig user lacks RBAC permissions for the target resource.
+- **502 Bad Gateway**: Kubernetes control plane API server is unreachable.
+
+## 19. Kong Gateway & Gateway API Architecture
+
+### 19.1 Background & Root Cause
+In modern Kubernetes environments running Kong, ingress routing often transitions from legacy `networking.k8s.io/v1 Ingress` resources to the official **Kubernetes Gateway API** (`gateway.networking.k8s.io/v1`) using `Gateway` and `HTTPRoute` resources. On clusters where this transition has occurred, querying standard Ingresses might only reveal a few test resources or none at all, while production traffic is handled by dozens of `HTTPRoute` objects.
+
+To solve this, the dashboard architecture includes first-class support for both Ingress and Gateway API routing paradigms, unified under an enriched networking view.
+
+### 19.2 Safe CRD Discovery & Graceful Fallback
+Clusters vary widely in the custom resource definitions (CRDs) installed:
+- Some clusters have Kong Ingress Controller with standard Ingresses.
+- Some have Gateway API CRDs (`gateways`, `httproutes`, `gatewayclasses`, `referencegrants`).
+- Some have `KongPlugin` CRDs (`configuration.konghq.com/v1`).
+- Some do not have `KongIngress` installed.
+
+The backend never assumes CRDs exist and never crashes if an API group is missing:
+- Requests to custom objects catch HTTP 404 / `NotFound` errors and return safe defaults (empty arrays or `{ installed: false }`).
+- CRD presence checks are cached per session to optimize API server throughput.
+
+### 19.3 Kong Plugin Resolution & Credential Sanitization
+When an Ingress or HTTPRoute contains Kong plugin annotations (e.g., `konghq.com/plugins: rate-limit, port-header, sczone-cors`), the backend:
+1. Parses comma-separated plugin names from annotations or HTTPRoute extension filters.
+2. Resolves the corresponding `KongPlugin` custom resources from the target namespace or cluster scope.
+3. Automatically sanitizes sensitive configuration values before returning JSON to the client. Any fields matching sensitive patterns (e.g., `password`, `token`, `secret`, `key`, `auth`, `cert`, `credential`) are masked as `[REDACTED]`.
+
+### 19.4 Visual Routing Graph
+For both Ingresses and HTTPRoutes, the backend builds a multi-tier routing topology representation:
+```text
+[ Client Traffic ]
+       │
+       ▼
+[ Kong Gateway / Ingress Controller ]
+  (Listeners: 80, 443 | Plugins: port-header, cors)
+       │
+       ▼
+[ Ingress / HTTPRoute Rules & Matches ]
+  (Hosts: grafana.example.com | Paths: /)
+       │
+       ▼
+[ Backend Kubernetes Service ]
+  (ClusterIP | TargetPort: 3000)
+       │
+       ▼
+[ Target Pods & Readiness ]
+  (Pod: grafana-785cbb8864-x7l5k | Ready: 1/1 | Node: k8s-worker-1)
+```
+
+The frontend renders this flow as an interactive, connected pipeline diagram with live pod indicators and plugin drawers.
+
+## 20. License
 
 The project declares the MIT license in `package.json`.
+

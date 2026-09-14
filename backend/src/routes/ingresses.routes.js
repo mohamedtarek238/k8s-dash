@@ -3,20 +3,26 @@ const ingressesController = require('../controllers/ingresses.controller');
 const { asyncHandler } = require('../utils/asyncHandler');
 const {
   validate,
-  namespaceQuerySchema,
+  ingressQuerySchema,
   namespacedNameParamsSchema,
-  detailQuerySchema,
+  ingressDetailQuerySchema,
 } = require('../middleware/validate');
 
 const router = express.Router();
 
-router.get('/', validate(namespaceQuerySchema), asyncHandler(ingressesController.getIngresses));
+router.get('/', validate(ingressQuerySchema), asyncHandler(ingressesController.getIngresses));
+router.get(
+  '/:namespace/:name/yaml',
+  validate(namespacedNameParamsSchema, 'params'),
+  asyncHandler(ingressesController.getIngressYaml)
+);
 router.get(
   '/:namespace/:name',
   validate(namespacedNameParamsSchema, 'params'),
-  validate(detailQuerySchema),
+  validate(ingressDetailQuerySchema),
   asyncHandler(ingressesController.getIngressDetails)
 );
 
 module.exports = router;
+
 

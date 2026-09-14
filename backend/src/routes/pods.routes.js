@@ -18,9 +18,15 @@ router.get(
   asyncHandler(podsController.getPodLogs)
 );
 router.get(
+  '/:namespace/:podName/yaml',
+  validate(podParamsSchema, 'params'),
+  asyncHandler(podsController.getPodYaml)
+);
+router.get(
   '/:namespace/:podName',
   validate(podParamsSchema, 'params'),
   asyncHandler(podsController.getPodDetails)
 );
 
 module.exports = router;
+

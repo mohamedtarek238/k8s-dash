@@ -60,6 +60,55 @@ function validate(schema, source = 'query') {
   };
 }
 
+const ingressQuerySchema = z.object({
+  namespace: z.string().min(1).optional(),
+  includeKong: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
+});
+
+const ingressDetailQuerySchema = z.object({
+  includeRelated: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
+  includeEvents: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val === 'true'),
+  includeKong: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((val) => val !== 'false'),
+});
+
+const resourceTypeSchema = z.enum([
+  'pods', 'pod',
+  'deployments', 'deployment',
+  'services', 'service',
+  'ingresses', 'ingress',
+  'statefulsets', 'statefulset',
+  'daemonsets', 'daemonset',
+  'namespaces', 'namespace',
+  'nodes', 'node',
+  'httproutes', 'httproute',
+  'gateways', 'gateway',
+  'gatewayclasses', 'gatewayclass',
+  'kongplugins', 'kongplugin',
+]);
+
+const genericNamespacedResourceParamsSchema = z.object({
+  resourceType: resourceTypeSchema,
+  namespace: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
+
+const genericClusterResourceParamsSchema = z.object({
+  resourceType: resourceTypeSchema,
+  name: z.string().trim().min(1),
+});
+
 module.exports = {
   namespaceQuerySchema,
   podLogsQuerySchema,
@@ -68,6 +117,11 @@ module.exports = {
   nameParamSchema,
   namespacedNameParamsSchema,
   detailQuerySchema,
+  ingressQuerySchema,
+  ingressDetailQuerySchema,
+  resourceTypeSchema,
+  genericNamespacedResourceParamsSchema,
+  genericClusterResourceParamsSchema,
   validate,
 };
 

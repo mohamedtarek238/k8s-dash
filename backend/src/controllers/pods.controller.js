@@ -1,4 +1,5 @@
 const podsService = require('../services/kubernetes/pods.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getPods(req, res) {
@@ -24,8 +25,16 @@ async function getPodLogs(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getPodYaml(req, res) {
+  const { namespace, podName } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('pods', { namespace, name: podName });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getPods,
   getPodDetails,
   getPodLogs,
+  getPodYaml,
 };
+

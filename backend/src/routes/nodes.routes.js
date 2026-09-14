@@ -7,6 +7,11 @@ const router = express.Router();
 
 router.get('/', asyncHandler(nodesController.getNodes));
 router.get(
+  '/:name/yaml',
+  validate(nameParamSchema, 'params'),
+  asyncHandler(nodesController.getNodeYaml)
+);
+router.get(
   '/:name',
   validate(nameParamSchema, 'params'),
   validate(detailQuerySchema),
@@ -14,4 +19,5 @@ router.get(
 );
 
 module.exports = router;
+
 

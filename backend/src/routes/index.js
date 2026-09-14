@@ -13,21 +13,41 @@ const statefulSetsRoutes = require('./statefulsets.routes');
 const daemonSetsRoutes = require('./daemonsets.routes');
 const healthRoutes = require('./health.routes');
 const troubleshootingRoutes = require('./troubleshooting.routes');
+const resourcesRoutes = require('./resources.routes');
+const gatewaysRoutes = require('./gateways.routes');
+const gatewayClassesRoutes = require('./gatewayclasses.routes');
+const httpRoutesRoutes = require('./httproutes.routes');
 
 const router = express.Router();
 
 router.use('/status', statusRoutes);
 router.use('/cluster', clusterRoutes);
 router.use('/nodes', nodesRoutes);
+router.use('/node', nodesRoutes);
 router.use('/namespaces', namespacesRoutes);
+router.use('/namespace', namespacesRoutes);
 router.use('/pods', podsRoutes);
+router.use('/pod', podsRoutes);
 router.use('/events', eventsRoutes);
 router.use('/deployments', deploymentsRoutes);
+router.use('/deployment', deploymentsRoutes);
 router.use('/services', servicesRoutes);
+router.use('/service', servicesRoutes);
 router.use('/ingresses', ingressesRoutes);
+router.use('/ingress', ingressesRoutes);
+router.use('/gateways', gatewaysRoutes);
+router.use('/gateway', gatewaysRoutes);
+router.use('/gateway-classes', gatewayClassesRoutes);
+router.use('/gateway-class', gatewayClassesRoutes);
+router.use('/http-routes', httpRoutesRoutes);
+router.use('/http-route', httpRoutesRoutes);
 router.use('/statefulsets', statefulSetsRoutes);
+router.use('/statefulset', statefulSetsRoutes);
 router.use('/daemonsets', daemonSetsRoutes);
+router.use('/daemonset', daemonSetsRoutes);
 router.use('/health', healthRoutes);
 router.use('/troubleshooting', troubleshootingRoutes);
+router.use('/resources', resourcesRoutes);
 
 module.exports = router;
+

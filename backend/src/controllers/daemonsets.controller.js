@@ -1,4 +1,5 @@
 const daemonSetsService = require('../services/kubernetes/daemonsets.service');
+const yamlService = require('../services/kubernetes/yaml.service');
 const { sendSuccess, sendList } = require('../utils/response');
 
 async function getDaemonSets(req, res) {
@@ -14,8 +15,16 @@ async function getDaemonSetDetails(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getDaemonSetYaml(req, res) {
+  const { namespace, name } = req.validatedParams;
+  const data = await yamlService.getResourceYaml('daemonsets', { namespace, name });
+  return sendSuccess(res, data);
+}
+
 module.exports = {
   getDaemonSets,
   getDaemonSetDetails,
+  getDaemonSetYaml,
 };
+
 

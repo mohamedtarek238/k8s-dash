@@ -27,7 +27,9 @@ export const api = {
   health: () => data('/api/health'),
   troubleshooting: () => data('/api/troubleshooting'),
   nodes: () => list('/api/nodes'),
+  node: (name) => data(`/api/nodes/${encodeURIComponent(name)}`),
   namespaces: () => list('/api/namespaces'),
+  namespace: (name) => data(`/api/namespaces/${encodeURIComponent(name)}`),
   pods: (namespace) => list(withNamespace('/api/pods', namespace)),
   pod: (namespace, name) => data(`/api/pods/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
   logs: (namespace, name, params = {}) => {
@@ -41,7 +43,43 @@ export const api = {
   deployments: (namespace) => list(withNamespace('/api/deployments', namespace)),
   deployment: (namespace, name) => data(`/api/deployments/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
   services: (namespace) => list(withNamespace('/api/services', namespace)),
+  service: (namespace, name) => data(`/api/services/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
   ingresses: (namespace) => list(withNamespace('/api/ingresses', namespace)),
+  ingress: (namespace, name) => data(`/api/ingresses/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
   statefulsets: (namespace) => list(withNamespace('/api/statefulsets', namespace)),
+  statefulset: (namespace, name) => data(`/api/statefulsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
   daemonsets: (namespace) => list(withNamespace('/api/daemonsets', namespace)),
+  daemonset: (namespace, name) => data(`/api/daemonsets/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
+  gateways: (namespace) => list(withNamespace('/api/gateways', namespace)),
+  gateway: (namespace, name) => data(`/api/gateways/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
+  gatewayClasses: () => list('/api/gateway-classes'),
+  gatewayClass: (name) => data(`/api/gateway-classes/${encodeURIComponent(name)}`),
+  httpRoutes: (namespace) => list(withNamespace('/api/http-routes', namespace)),
+  httpRoute: (namespace, name) => data(`/api/http-routes/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
+  yaml: (resourceType, namespace, name) => {
+    const pluralMap = {
+      pod: 'pods',
+      deployment: 'deployments',
+      service: 'services',
+      ingress: 'ingresses',
+      statefulset: 'statefulsets',
+      daemonset: 'daemonsets',
+      node: 'nodes',
+      namespace: 'namespaces',
+      httproute: 'httproutes',
+      httproutes: 'httproutes',
+      gateway: 'gateways',
+      gateways: 'gateways',
+      gatewayclass: 'gatewayclasses',
+      gatewayclasses: 'gatewayclasses',
+      kongplugin: 'kongplugins',
+      kongplugins: 'kongplugins',
+    };
+    const canonical = pluralMap[resourceType?.toLowerCase()] || resourceType;
+    if (!namespace) {
+      return data(`/api/resources/${encodeURIComponent(canonical)}/${encodeURIComponent(name)}/yaml`);
+    }
+    return data(`/api/resources/${encodeURIComponent(canonical)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/yaml`);
+  },
 };
+

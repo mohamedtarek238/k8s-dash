@@ -114,14 +114,33 @@ All endpoints are prefixed with `/api`.
 | GET | `/api/deployments/:namespace/:name` | Deployment details |
 | GET | `/api/services` | List services (`?namespace=default` optional) |
 | GET | `/api/services/:namespace/:name` | Service details (`?includeRelated=&includeEvents=`) |
-| GET | `/api/ingresses` | List ingresses (`?namespace=default` optional) |
-| GET | `/api/ingresses/:namespace/:name` | Ingress details (`?includeRelated=&includeEvents=`) |
+| GET | `/api/ingresses` | List ingresses with Kong controller detection (`?namespace=default` optional) |
+| GET | `/api/ingresses/:namespace/:name` | Ingress details with Kong plugins & routing chain |
+| GET | `/api/http-routes` | List Gateway API HTTPRoutes (`?namespace=kong-system` optional) |
+| GET | `/api/http-routes/:namespace/:name` | HTTPRoute details with parent Gateways, plugins & backend pods |
+| GET | `/api/gateways` | List Gateway API Gateways (`?namespace=` optional) |
+| GET | `/api/gateways/:namespace/:name` | Gateway details with listeners, addresses & conditions |
+| GET | `/api/gateway-classes` | List GatewayClasses |
+| GET | `/api/gateway-classes/:name` | GatewayClass details and controller |
 | GET | `/api/statefulsets` | List StatefulSets (`?namespace=default` optional) |
 | GET | `/api/statefulsets/:namespace/:name` | StatefulSet details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/daemonsets` | List DaemonSets (`?namespace=default` optional) |
 | GET | `/api/daemonsets/:namespace/:name` | DaemonSet details (`?includeRelated=&includeEvents=`) |
 | GET | `/api/health` | Cluster health score and detected issues |
 | GET | `/api/troubleshooting` | Issues grouped by severity |
+| GET | `/api/pods/:namespace/:podName/yaml` | Pod raw YAML manifest |
+| GET | `/api/deployments/:namespace/:name/yaml` | Deployment raw YAML manifest |
+| GET | `/api/services/:namespace/:name/yaml` | Service raw YAML manifest |
+| GET | `/api/ingresses/:namespace/:name/yaml` | Ingress raw YAML manifest |
+| GET | `/api/http-routes/:namespace/:name/yaml` | Gateway API HTTPRoute raw YAML manifest |
+| GET | `/api/gateways/:namespace/:name/yaml` | Gateway API Gateway raw YAML manifest |
+| GET | `/api/gateway-classes/:name/yaml` | Gateway API GatewayClass raw YAML manifest |
+| GET | `/api/statefulsets/:namespace/:name/yaml` | StatefulSet raw YAML manifest |
+| GET | `/api/daemonsets/:namespace/:name/yaml` | DaemonSet raw YAML manifest |
+| GET | `/api/namespaces/:name/yaml` | Namespace raw YAML manifest |
+| GET | `/api/nodes/:name/yaml` | Node raw YAML manifest |
+| GET | `/api/resources/:resourceType/:namespace/:name/yaml` | Generic YAML for namespaced resources (`pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `kongplugins`, `statefulsets`, `daemonsets`) |
+| GET | `/api/resources/:resourceType/:name/yaml` | Generic YAML for cluster resources (`nodes`, `namespaces`, `gatewayclasses`) |
 
 ### Detail Query Parameters
 
@@ -129,7 +148,20 @@ Detail endpoints accept optional query parameters:
 - `includeRelated=true|false` (default: `false`): Embeds linked resources (e.g., Pods scheduled on a Node, Pods selected by a Service, backend Services for an Ingress, workload counts for a Namespace).
 - `includeEvents=true|false` (default: `false`): Embeds related Kubernetes events, sorted newest first.
 
+### Kong Gateway & Ingress Integration
+
+The backend features native inspection for clusters using **Kong as the API Gateway / Ingress Controller**:
+- **Automatic Kong Controller Detection**: Detects whether routing is handled by Kong Ingress Controller or Kong Gateway Operator.
+- **Gateway API Support**: First-class support for `gateway.networking.k8s.io/v1` resources (`Gateway`, `HTTPRoute`, `GatewayClass`, `ReferenceGrant`).
+- **Kong Plugin Resolution**: Resolves attached `KongPlugin` CRDs (`konghq.com/plugins`) and automatically **masks sensitive credentials** (`password`, `token`, `key`, `secret`).
+- **End-to-End Routing Flow**: Reconstructs the complete topology from `Client -> Gateway -> Ingress/HTTPRoute -> Service -> Pods` with live pod health status.
+
+### YAML Manifests
+
+YAML endpoints are 100% read-only and return dynamically generated manifests using `js-yaml` directly from the live control plane object. Supported types: `pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `gatewayclasses`, `kongplugins`, `statefulsets`, `daemonsets`, `namespaces`, `nodes`.
+
 ## Example curl commands
+
 
 ```bash
 # Status
