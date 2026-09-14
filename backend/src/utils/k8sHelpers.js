@@ -136,9 +136,135 @@ function formatServicePort(port) {
   return `${port.port}/${protocol}`;
 }
 
+function parseQuantityToBytes(quantity) {
+  if (quantity === null || quantity === undefined) {
+    return null;
+  }
+
+  if (typeof quantity === 'number') {
+    return Number.isFinite(quantity) && quantity >= 0 ? quantity : null;
+  }
+
+  const str = String(quantity).trim();
+  if (!str) {
+    return null;
+  }
+
+  const match = str.match(/^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*([a-zA-Z]*)$/);
+  if (!match) {
+    return null;
+  }
+
+  const num = parseFloat(match[1]);
+  if (Number.isNaN(num) || !Number.isFinite(num)) {
+    return null;
+  }
+
+  const rawUnit = match[2];
+  if (!rawUnit) {
+    return num >= 0 ? num : null;
+  }
+
+  const binaryMultipliers = {
+    Ki: 1024,
+    Mi: 1024 ** 2,
+    Gi: 1024 ** 3,
+    Ti: 1024 ** 4,
+    Pi: 1024 ** 5,
+    Ei: 1024 ** 6,
+  };
+
+  const decimalMultipliers = {
+    m: 1e-3,
+    k: 1e3,
+    K: 1e3,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+    P: 1e15,
+    E: 1e18,
+  };
+
+  if (binaryMultipliers[rawUnit] !== undefined) {
+    return num * binaryMultipliers[rawUnit];
+  }
+  if (decimalMultipliers[rawUnit] !== undefined) {
+    return num * decimalMultipliers[rawUnit];
+  }
+
+  const cleanUnit = (rawUnit.endsWith('B') || rawUnit.endsWith('b')) && rawUnit.length > 1 ? rawUnit.slice(0, -1) : rawUnit;
+  const upperClean = cleanUnit.toUpperCase();
+
+  const caseInsensitiveBinary = {
+    KI: 1024,
+    MI: 1024 ** 2,
+    GI: 1024 ** 3,
+    TI: 1024 ** 4,
+    PI: 1024 ** 5,
+    EI: 1024 ** 6,
+  };
+
+  if (caseInsensitiveBinary[upperClean] !== undefined) {
+    return num * caseInsensitiveBinary[upperClean];
+  }
+
+  const caseInsensitiveDecimal = {
+    K: 1e3,
+    M: 1e6,
+    G: 1e9,
+    T: 1e12,
+    P: 1e15,
+    E: 1e18,
+  };
+
+  if (caseInsensitiveDecimal[upperClean] !== undefined) {
+    return num * caseInsensitiveDecimal[upperClean];
+  }
+
+  if (upperClean === 'B' || upperClean === 'BYTES') {
+    return num;
+  }
+
+  return null;
+}
+
+function formatMemoryQuantity(quantity) {
+  if (quantity === null || quantity === undefined) {
+    return '—';
+  }
+
+  if (typeof quantity === 'string' && quantity.trim() === '') {
+    return '—';
+  }
+
+  const bytes = parseQuantityToBytes(quantity);
+  if (bytes === null || Number.isNaN(bytes)) {
+    return '—';
+  }
+
+  if (bytes === 0) {
+    return '0 GiB';
+  }
+
+  const gib = bytes / (1024 ** 3);
+
+  if (gib > 0 && gib < 0.01) {
+    const formatted3 = parseFloat(gib.toFixed(3));
+    if (formatted3 > 0) {
+      return `${formatted3} GiB`;
+    }
+    return '< 0.01 GiB';
+  }
+
+  const rounded = parseFloat(gib.toFixed(2));
+  return `${rounded} GiB`;
+}
+
 module.exports = {
   getResponseBody,
   parseResourceQuantity,
+  parseQuantityToBytes,
+  formatMemoryQuantity,
   getNodeRoles,
   getNodeCondition,
   isNodeReady,
