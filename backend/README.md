@@ -72,12 +72,14 @@ Development mode with auto-reload:
 npm run dev
 ```
 
-The server starts on `http://localhost:5000` by default.
+The server starts on `http://localhost:5100` (or `5000` if `PORT` is omitted in `.env`).
 
 ## Quick health check
 
 ```bash
-curl http://localhost:5000/api/status
+curl http://localhost:5100/api/status
+# Or if running on default port 5000:
+# curl http://localhost:5000/api/status
 ```
 
 Example response:
