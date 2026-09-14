@@ -13,13 +13,13 @@ function mapPodSummary(pod) {
   const readiness = getPodReadiness(pod);
 
   return {
-    name: pod.metadata.name,
-    namespace: pod.metadata.namespace,
+    name: pod.metadata?.name || 'unknown',
+    namespace: pod.metadata?.namespace || 'default',
     status: pod.status?.phase || 'Unknown',
     phase: pod.status?.phase || 'Unknown',
     podIP: pod.status?.podIP || null,
     nodeName: pod.spec?.nodeName || null,
-    creationTimestamp: pod.metadata.creationTimestamp,
+    creationTimestamp: pod.metadata?.creationTimestamp || null,
     restartCount: getPodRestartCount(pod),
     containers: mapContainers(pod.spec?.containers || []),
     containerStatuses: mapContainerStatuses(pod.status?.containerStatuses || []),
@@ -28,6 +28,7 @@ function mapPodSummary(pod) {
     message: pod.status?.message || null,
   };
 }
+
 
 function mapPodDetails(pod, events = []) {
   return {

@@ -1,11 +1,24 @@
 const { sendError } = require('../utils/response');
 
+function isNetworkError(err) {
+  const code = err?.code;
+  const msg = err?.message || '';
+  return (
+    ['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'ECONNRESET', 'EAI_AGAIN'].includes(code) ||
+    msg.includes('connect ECONNREFUSED') ||
+    msg.includes('connect ETIMEDOUT') ||
+    msg.includes('connect EHOSTUNREACH') ||
+    msg.includes('connect ENETUNREACH') ||
+    msg.includes('fetch failed')
+  );
+}
+
 function isKubernetesApiError(err) {
   return (
     err &&
     (err.statusCode !== undefined ||
       err.response?.statusCode !== undefined ||
-      err.code !== undefined ||
+      typeof err.code === 'number' ||
       err.body !== undefined ||
       err.response?.body !== undefined)
   );
@@ -44,16 +57,27 @@ function extractKubernetesError(err) {
   };
 }
 
-
 function notFoundHandler(req, res) {
   return sendError(res, 404, 'Not Found', `Route ${req.method} ${req.originalUrl} not found`);
 }
 
 function errorHandler(err, req, res, _next) {
+  console.error(`[Error] ${req.method} ${req.originalUrl}:`, err.message || err);
+
   if (err.name === 'ZodError') {
     return sendError(res, 400, 'Validation Error', 'Invalid request parameters', {
       issues: err.errors,
     });
+  }
+
+  if (isNetworkError(err)) {
+    return sendError(
+      res,
+      502,
+      'Cluster Unreachable',
+      `Unable to connect to Kubernetes cluster: ${err.message}`,
+      { code: err.code }
+    );
   }
 
   if (isKubernetesApiError(err)) {
@@ -82,6 +106,7 @@ function errorHandler(err, req, res, _next) {
     isProduction ? {} : { stack: err.stack }
   );
 }
+
 
 module.exports = {
   notFoundHandler,
