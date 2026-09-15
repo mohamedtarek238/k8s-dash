@@ -81,6 +81,35 @@ export const api = {
   gatewayClass: (name) => data(`/api/gateway-classes/${encodeURIComponent(name)}`),
   httpRoutes: (namespace) => list(withNamespace('/api/http-routes', namespace)),
   httpRoute: (namespace, name) => data(`/api/http-routes/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
+  operators: () => list('/api/operators'),
+  crds: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.group) query.set('group', params.group);
+    if (params.search) query.set('search', params.search);
+    return list(`/api/crds${query.toString() ? `?${query}` : ''}`);
+  },
+  crd: (name) => data(`/api/crds/${encodeURIComponent(name)}`),
+  crdYaml: (name) => data(`/api/crds/${encodeURIComponent(name)}/yaml`),
+  customResources: (group, version, plural, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.namespace) query.set('namespace', params.namespace);
+    if (params.scope) query.set('scope', params.scope);
+    return list(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}${query.toString() ? `?${query}` : ''}`);
+  },
+  customResource: (group, version, plural, namespace, name, scope = 'Namespaced') => {
+    const isNamespaced = scope.toLowerCase() === 'namespaced' && namespace;
+    if (isNamespaced) {
+      return data(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`);
+    }
+    return data(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}/${encodeURIComponent(name)}`);
+  },
+  customResourceYaml: (group, version, plural, namespace, name, scope = 'Namespaced') => {
+    const isNamespaced = scope.toLowerCase() === 'namespaced' && namespace;
+    if (isNamespaced) {
+      return data(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/yaml`);
+    }
+    return data(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}/${encodeURIComponent(name)}/yaml`);
+  },
   yaml: (resourceType, namespace, name) => {
     const pluralMap = {
       pod: 'pods',
@@ -99,6 +128,9 @@ export const api = {
       gatewayclasses: 'gatewayclasses',
       kongplugin: 'kongplugins',
       kongplugins: 'kongplugins',
+      crd: 'crds',
+      crds: 'crds',
+      customresourcedefinition: 'crds',
     };
     const canonical = pluralMap[resourceType?.toLowerCase()] || resourceType;
     if (!namespace) {

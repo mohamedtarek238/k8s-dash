@@ -217,6 +217,13 @@ curl "http://localhost:5000/api/statefulsets/default/my-statefulset?includeRelat
 curl http://localhost:5000/api/daemonsets
 curl "http://localhost:5000/api/daemonsets/kube-system/my-daemonset?includeRelated=true"
 
+# Operators & CRDs Explorer
+curl http://localhost:5000/api/operators
+curl "http://localhost:5000/api/crds?search=kong"
+curl http://localhost:5000/api/crds/clustercompliancereports.aquasecurity.github.io
+curl http://localhost:5000/api/crds/clustercompliancereports.aquasecurity.github.io/yaml
+curl http://localhost:5000/api/custom-resources/aquasecurity.github.io/v1alpha1/clustercompliancereports
+
 # Cluster health
 curl http://localhost:5000/api/health
 

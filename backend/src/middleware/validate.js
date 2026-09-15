@@ -109,6 +109,37 @@ const genericClusterResourceParamsSchema = z.object({
   name: z.string().trim().min(1),
 });
 
+const crdQuerySchema = z.object({
+  group: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
+});
+
+const crdCoordinatesParamsSchema = z.object({
+  group: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  plural: z.string().trim().min(1),
+});
+
+const customResourceListQuerySchema = z.object({
+  namespace: z.string().trim().min(1).optional(),
+  scope: z.enum(['Namespaced', 'Cluster', 'namespaced', 'cluster']).optional(),
+});
+
+const customResourceNamespacedParamsSchema = z.object({
+  group: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  plural: z.string().trim().min(1),
+  namespace: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
+
+const customResourceClusterParamsSchema = z.object({
+  group: z.string().trim().min(1),
+  version: z.string().trim().min(1),
+  plural: z.string().trim().min(1),
+  name: z.string().trim().min(1),
+});
+
 module.exports = {
   namespaceQuerySchema,
   podLogsQuerySchema,
@@ -122,6 +153,11 @@ module.exports = {
   resourceTypeSchema,
   genericNamespacedResourceParamsSchema,
   genericClusterResourceParamsSchema,
+  crdQuerySchema,
+  crdCoordinatesParamsSchema,
+  customResourceListQuerySchema,
+  customResourceNamespacedParamsSchema,
+  customResourceClusterParamsSchema,
   validate,
 };
 

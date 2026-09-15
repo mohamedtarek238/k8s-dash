@@ -18,6 +18,9 @@ const resourcesRoutes = require('./resources.routes');
 const gatewaysRoutes = require('./gateways.routes');
 const gatewayClassesRoutes = require('./gatewayclasses.routes');
 const httpRoutesRoutes = require('./httproutes.routes');
+const crdsRoutes = require('./crds.routes');
+const operatorsRoutes = require('./operators.routes');
+const customResourcesRoutes = require('./customResources.routes');
 
 const router = express.Router();
 
@@ -43,6 +46,12 @@ router.use('/gateway-classes', gatewayClassesRoutes);
 router.use('/gateway-class', gatewayClassesRoutes);
 router.use('/http-routes', httpRoutesRoutes);
 router.use('/http-route', httpRoutesRoutes);
+router.use('/crds', crdsRoutes);
+router.use('/crd', crdsRoutes);
+router.use('/operators', operatorsRoutes);
+router.use('/operator', operatorsRoutes);
+router.use('/custom-resources', customResourcesRoutes);
+router.use('/custom-resource', customResourcesRoutes);
 router.use('/statefulsets', statefulSetsRoutes);
 router.use('/statefulset', statefulSetsRoutes);
 router.use('/daemonsets', daemonSetsRoutes);

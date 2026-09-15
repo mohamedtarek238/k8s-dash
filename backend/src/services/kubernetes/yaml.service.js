@@ -240,6 +240,38 @@ const SUPPORTED_RESOURCES = {
         name,
       }),
   },
+  crd: {
+    canonical: 'customresourcedefinitions',
+    namespaced: false,
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    fetch: (clients, { name }) =>
+      clients.apiextensionsV1Api.readCustomResourceDefinition({ name }),
+  },
+  crds: {
+    canonical: 'customresourcedefinitions',
+    namespaced: false,
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    fetch: (clients, { name }) =>
+      clients.apiextensionsV1Api.readCustomResourceDefinition({ name }),
+  },
+  customresourcedefinition: {
+    canonical: 'customresourcedefinitions',
+    namespaced: false,
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    fetch: (clients, { name }) =>
+      clients.apiextensionsV1Api.readCustomResourceDefinition({ name }),
+  },
+  customresourcedefinitions: {
+    canonical: 'customresourcedefinitions',
+    namespaced: false,
+    apiVersion: 'apiextensions.k8s.io/v1',
+    kind: 'CustomResourceDefinition',
+    fetch: (clients, { name }) =>
+      clients.apiextensionsV1Api.readCustomResourceDefinition({ name }),
+  },
 };
 
 /**
@@ -330,8 +362,52 @@ async function getResourceYaml(resourceType, { namespace, name } = {}, clients) 
   };
 }
 
+/**
+ * Fetches any live custom resource instance dynamically and returns formatted YAML.
+ */
+async function getCustomResourceYaml({ group, version, plural, scope, namespace, name }, clients) {
+  const isNamespaced = scope ? scope.toLowerCase() === 'namespaced' : Boolean(namespace);
+
+  let response;
+  if (isNamespaced && namespace) {
+    response = await clients.customObjectsApi.getNamespacedCustomObject({
+      group,
+      version,
+      namespace,
+      plural,
+      name,
+    });
+  } else {
+    response = await clients.customObjectsApi.getClusterCustomObject({
+      group,
+      version,
+      plural,
+      name,
+    });
+  }
+
+  const rawObj = getResponseBody(response);
+  const normalized = normalizeKubernetesObject(rawObj, `${group}/${version}`, rawObj.kind || 'CustomResource');
+
+  const yamlString = yaml.dump(normalized, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+  });
+
+  return {
+    yaml: yamlString,
+    kind: normalized.kind,
+    apiVersion: normalized.apiVersion,
+    name: normalized.metadata?.name || name,
+    namespace: normalized.metadata?.namespace || namespace || null,
+  };
+}
+
 module.exports = {
   SUPPORTED_RESOURCES,
   getResourceYaml,
+  getCustomResourceYaml,
   normalizeKubernetesObject,
 };

@@ -674,7 +674,26 @@ For both Ingresses and HTTPRoutes, the backend builds a multi-tier routing topol
 
 The frontend renders this flow as an interactive, connected pipeline diagram with live pod indicators and plugin drawers.
 
-## 20. License
+## 20. Operators & CRDs Explorer Architecture
+
+### 20.1 Dynamic Discovery & Heuristic Engine
+The Kubernetes Operators & CRDs Explorer enables seamless inspection of all custom API extensions running in any connected cluster without hardcoded operator definitions:
+1. **Dynamic CRD Discovery**: Uses `@kubernetes/client-node` `ApiextensionsV1Api` (`listCustomResourceDefinition`, `readCustomResourceDefinition`) to discover all installed CRDs dynamically.
+2. **Safe Operator Heuristic Engine**:
+   - Inspects explicit metadata labels/annotations (`app.kubernetes.io/part-of`, `operators.coreos.com/operator-name`, `olm.owner`, `operator.name`).
+   - Checks well-known API group domains (`monitoring.coreos.com` -> Prometheus Operator, `k8s.keycloak.org` -> Keycloak Operator, `konghq.com` -> Kong Gateway, `platform.confluent.io` -> Confluent Operator, `aquasecurity.github.io` -> Trivy / Aqua Security, `cilium.io` -> Cilium, `gateway.networking.k8s.io` -> Kubernetes Gateway API, `cert-manager.io` -> cert-manager, etc.).
+   - Safe Fallback: If no operator is detected, the resource is cleanly cataloged under its root API Group. Operator names are never fabricated.
+3. **In-Memory Cluster Cache**: CRD discovery lists are cached in-memory per cluster (`Map<clusterId, { data, time }>`) with a 60-second TTL to ensure instantaneous UI response times while minimizing load on the Kubernetes API server.
+
+### 20.2 Custom Resource (CR) Browsing & Lifecycle
+1. **Scope-Aware Retrieval**: Supports both Namespaced (`customObjectsApi.listNamespacedCustomObject`) and Cluster-Scoped (`customObjectsApi.listClusterCustomObject`) custom resource instances.
+2. **Instance Details**: Exposes full metadata, spec, and status objects with conditions and generation tracking.
+3. **Dynamic Manifest Generation**: Live YAML manifest generation for both CRDs (`/api/crds/:name/yaml`) and individual custom resource instances (`/api/custom-resources/:group/:version/:plural/:namespace?/:name/yaml`).
+
+### 20.3 Multi-Cluster Integration
+Every request to `/api/crds`, `/api/operators`, and `/api/custom-resources` honors the `?cluster=<id>` query parameter, allowing instant switching between production, staging, and development cluster environments.
+
+## 21. License
 
 The project declares the MIT license in `package.json`.
 

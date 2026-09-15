@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowDown, Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Cpu, Database,
+  Activity, AlertTriangle, ArrowDown, Blocks, Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Cpu, Database,
   ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, Menu, Moon, Network,
   Package, PanelLeftClose, PanelLeftOpen, RefreshCw, Route, Search, Server, Settings2, Shield, Sun, Terminal,
   X, Zap
@@ -17,6 +17,7 @@ const nav = [
   { key: 'deployments', label: 'Deployments', icon: Package },
   { key: 'services', label: 'Services', icon: Network },
   { key: 'ingresses', label: 'Ingress', icon: ExternalLink },
+  { key: 'operators', label: 'Operators & CRDs', icon: Blocks },
   { key: 'events', label: 'Events', icon: Activity },
 ];
 
@@ -852,6 +853,559 @@ function IngressDetail({ ingress, onClose }) {
   );
 }
 
+function OperatorsView({ onSelectCRD }) {
+  const [activeTab, setActiveTab] = useState('all');
+  const [search, setSearch] = useState('');
+  const [selectedGroup, setSelectedGroup] = useState('');
+
+  const crdsResource = useResource(api.crds, []);
+  const operatorsResource = useResource(api.operators, []);
+
+  const allCRDs = crdsResource.data?.data || [];
+  const operators = operatorsResource.data?.data || [];
+
+  const groups = useMemo(() => {
+    const set = new Set();
+    allCRDs.forEach((c) => { if (c.group) set.add(c.group); });
+    return Array.from(set).sort();
+  }, [allCRDs]);
+
+  const namespacedCount = useMemo(() => allCRDs.filter((c) => c.scope === 'Namespaced').length, [allCRDs]);
+  const clusterCount = useMemo(() => allCRDs.filter((c) => c.scope === 'Cluster').length, [allCRDs]);
+  const detectedOperatorsCount = useMemo(() => operators.filter((o) => o.detected).length, [operators]);
+
+  const filteredCRDs = useMemo(() => {
+    let list = allCRDs;
+    if (activeTab === 'namespaced') {
+      list = list.filter((c) => c.scope === 'Namespaced');
+    } else if (activeTab === 'cluster') {
+      list = list.filter((c) => c.scope === 'Cluster');
+    }
+    if (selectedGroup) {
+      list = list.filter((c) => c.group === selectedGroup || (c.operator?.name && c.operator.name === selectedGroup));
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.kind.toLowerCase().includes(q) ||
+        c.group.toLowerCase().includes(q) ||
+        (c.operator?.name && c.operator.name.toLowerCase().includes(q)) ||
+        (c.shortNames && c.shortNames.some((sn) => sn.toLowerCase().includes(q)))
+      );
+    }
+    return list;
+  }, [allCRDs, activeTab, selectedGroup, search]);
+
+  const filteredOperators = useMemo(() => {
+    if (!search.trim()) return operators;
+    const q = search.toLowerCase();
+    return operators.filter((o) =>
+      o.name.toLowerCase().includes(q) ||
+      o.group.toLowerCase().includes(q) ||
+      o.crds.some((c) => c.name.toLowerCase().includes(q) || c.kind.toLowerCase().includes(q))
+    );
+  }, [operators, search]);
+
+  const isLoading = crdsResource.loading || operatorsResource.loading;
+  const error = crdsResource.error || operatorsResource.error;
+  const reload = () => {
+    crdsResource.reload();
+    operatorsResource.reload();
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Custom Resources & Controllers"
+        title="Operators & CRDs Explorer"
+        description="Discover CustomResourceDefinitions dynamically, explore detected operators, and inspect custom resource instances."
+        action={
+          <button className="button subtle" onClick={reload}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        }
+      />
+
+      <div className="metrics-grid">
+        <Metric
+          icon={Blocks}
+          label="Total CRDs"
+          value={allCRDs.length}
+          detail="Installed in cluster"
+          accent="teal"
+        />
+        <Metric
+          icon={Shield}
+          label="Detected Operators"
+          value={detectedOperatorsCount}
+          detail={`${operators.length} API Groups`}
+          accent="blue"
+        />
+        <Metric
+          icon={Box}
+          label="Namespaced CRDs"
+          value={namespacedCount}
+          detail="Scoped to namespaces"
+          accent="amber"
+        />
+        <Metric
+          icon={Server}
+          label="Cluster-Scoped CRDs"
+          value={clusterCount}
+          detail="Cluster-wide resources"
+          accent="coral"
+        />
+      </div>
+
+      <div className="sub-nav-tabs">
+        <button
+          className={`sub-nav-tab ${activeTab === 'all' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('all'); setSelectedGroup(''); }}
+        >
+          <Blocks size={15} /> All CRDs ({allCRDs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'operators' ? 'active' : ''}`}
+          onClick={() => setActiveTab('operators')}
+        >
+          <Shield size={15} /> By Operator / Group ({operators.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'namespaced' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('namespaced'); setSelectedGroup(''); }}
+        >
+          <Box size={15} /> Namespaced ({namespacedCount})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'cluster' ? 'active' : ''}`}
+          onClick={() => { setActiveTab('cluster'); setSelectedGroup(''); }}
+        >
+          <Server size={15} /> Cluster-Scoped ({clusterCount})
+        </button>
+      </div>
+
+      <Toolbar search={search} setSearch={setSearch} onRefresh={reload}>
+        {activeTab !== 'operators' && (
+          <select
+            className="select"
+            value={selectedGroup}
+            onChange={(e) => setSelectedGroup(e.target.value)}
+          >
+            <option value="">All API Groups ({groups.length})</option>
+            {groups.map((g) => (
+              <option key={g} value={g}>{g}</option>
+            ))}
+          </select>
+        )}
+      </Toolbar>
+
+      {isLoading ? (
+        <Loading rows={6} />
+      ) : error ? (
+        <ErrorState error={error} reload={reload} />
+      ) : activeTab === 'operators' ? (
+        <div className="operators-grid">
+          {filteredOperators.map((op) => (
+            <div
+              key={op.name}
+              className={`operator-card ${selectedGroup === op.name ? 'active' : ''}`}
+              onClick={() => {
+                setSelectedGroup(op.name);
+                setActiveTab('all');
+              }}
+            >
+              <div className="operator-card-header">
+                <div className="operator-card-title">
+                  <Shield size={16} />
+                  <span>{op.name}</span>
+                </div>
+                <Badge tone={op.detected ? 'success' : 'info'}>
+                  {op.detected ? 'Operator' : 'API Group'}
+                </Badge>
+              </div>
+              <div className="operator-card-group">{op.group}</div>
+              <div className="operator-card-crds">
+                {op.crds.slice(0, 6).map((c) => (
+                  <span key={c.name} className="operator-crd-tag">
+                    {c.kind}
+                  </span>
+                ))}
+                {op.crds.length > 6 && (
+                  <span className="operator-crd-tag" style={{ color: 'var(--muted)' }}>
+                    +{op.crds.length - 6} more
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Table
+          rows={filteredCRDs}
+          onRow={onSelectCRD}
+          emptyTitle="No CustomResourceDefinitions found"
+          columns={[
+            {
+              key: 'kind',
+              label: 'Custom Resource Kind',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Blocks size={16} />
+                  {r.kind}
+                </strong>
+              ),
+            },
+            {
+              key: 'group',
+              label: 'API Group / Version',
+              render: (r) => (
+                <div>
+                  <span className="mono" style={{ fontSize: '11.5px' }}>{r.group}</span>
+                  <div style={{ fontSize: '10.5px', color: 'var(--muted)' }}>{r.version}</div>
+                </div>
+              ),
+            },
+            {
+              key: 'scope',
+              label: 'Scope',
+              render: (r) => (
+                <Badge tone={r.scope === 'Namespaced' ? 'warning' : 'info'}>
+                  {r.scope}
+                </Badge>
+              ),
+            },
+            {
+              key: 'operator',
+              label: 'Associated Operator',
+              render: (r) => (
+                <Badge tone={r.operator?.detected ? 'success' : 'default'}>
+                  {r.operator?.detected ? r.operator.name : 'Standard / Group'}
+                </Badge>
+              ),
+            },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => (
+                <Badge tone={r.established ? 'success' : 'warning'}>
+                  {r.established ? 'Established' : 'Pending'}
+                </Badge>
+              ),
+            },
+            {
+              key: 'age',
+              label: 'Age',
+              render: (r) => r.age || age(r.creationTimestamp),
+            },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function CRDDetail({ crd, onClose, onSelectInstance }) {
+  const [tab, setTab] = useState('overview');
+  const [instanceNamespace, setInstanceNamespace] = useState('');
+  const [instanceSearch, setInstanceSearch] = useState('');
+
+  const detail = useResource(() => api.crd(crd.name), [crd.name]);
+  const instances = useResource(
+    () => api.customResources(crd.group, crd.version, crd.plural, {
+      scope: crd.scope,
+      namespace: instanceNamespace,
+    }),
+    [crd.group, crd.version, crd.plural, crd.scope, instanceNamespace]
+  );
+
+  const data = detail.data || crd;
+  const instanceRows = (instances.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace || ''}`.toLowerCase().includes(instanceSearch.toLowerCase())
+  );
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <span className="eyebrow">CustomResourceDefinition</span>
+        <h2>{data.kind}</h2>
+
+        <div className="detail-tabs">
+          <button className={`detail-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
+            Overview
+          </button>
+          <button className={`detail-tab ${tab === 'instances' ? 'active' : ''}`} onClick={() => setTab('instances')}>
+            <Box size={14} /> Live Instances ({instances.data?.data?.length ?? '—'})
+          </button>
+          <button className={`detail-tab ${tab === 'yaml' ? 'active' : ''}`} onClick={() => setTab('yaml')}>
+            <FileCode size={14} /> YAML
+          </button>
+        </div>
+
+        {tab === 'overview' ? (
+          detail.loading ? (
+            <Loading rows={4} />
+          ) : detail.error ? (
+            <ErrorState error={detail.error} reload={detail.reload} />
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <Badge tone={data.scope === 'Namespaced' ? 'warning' : 'info'}>{data.scope}</Badge>
+                {data.operator?.detected && (
+                  <Badge tone="success">{data.operator.name}</Badge>
+                )}
+                <Badge tone={data.established ? 'success' : 'warning'}>
+                  {data.established ? 'Established' : 'Pending'}
+                </Badge>
+              </div>
+
+              <KeyValues
+                values={{
+                  'Full Name': data.name,
+                  'API Group': data.group,
+                  'Preferred Version': data.version,
+                  'Versions Served': data.versions?.map((v) => v.name).join(', ') || data.version,
+                  'Plural / Singular': `${data.plural} / ${data.singular}`,
+                  'Short Names': data.shortNames?.join(', ') || '—',
+                  'Categories': data.categories?.join(', ') || '—',
+                  'Created': formatDate(data.creationTimestamp),
+                  'Age': data.age || age(data.creationTimestamp),
+                }}
+              />
+
+              {data.description && (
+                <>
+                  <h3>Schema Description</h3>
+                  <div className="schema-description">
+                    {data.description}
+                  </div>
+                </>
+              )}
+
+              {data.conditions && data.conditions.length > 0 && (
+                <>
+                  <h3>Conditions</h3>
+                  <div className="mini-list">
+                    {data.conditions.map((c, idx) => (
+                      <div key={idx}>
+                        <strong>{c.type}</strong>
+                        <span>{c.status} {c.message ? `— ${c.message}` : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )
+        ) : tab === 'instances' ? (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', gap: '8px', flex: 1 }}>
+                <input
+                  className="select"
+                  style={{ flex: 1 }}
+                  value={instanceSearch}
+                  onChange={(e) => setInstanceSearch(e.target.value)}
+                  placeholder="Filter instances..."
+                />
+                {data.scope === 'Namespaced' && (
+                  <input
+                    className="select"
+                    value={instanceNamespace}
+                    onChange={(e) => setInstanceNamespace(e.target.value)}
+                    placeholder="All namespaces"
+                  />
+                )}
+              </div>
+              <button className="icon-button" style={{ marginLeft: '8px' }} onClick={instances.reload} title="Refresh instances">
+                <RefreshCw size={14} />
+              </button>
+            </div>
+
+            {instances.loading ? (
+              <Loading rows={3} />
+            ) : instances.error ? (
+              <ErrorState error={instances.error} reload={instances.reload} />
+            ) : (
+              <Table
+                rows={instanceRows}
+                onRow={(inst) => onSelectInstance({ crd: data, instance: inst })}
+                emptyTitle={`No ${data.kind} instances found`}
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Name',
+                    render: (r) => (
+                      <strong className="resource-name">
+                        <Box size={14} />
+                        {r.name}
+                      </strong>
+                    ),
+                  },
+                  ...(data.scope === 'Namespaced' ? [{ key: 'namespace', label: 'Namespace' }] : []),
+                  {
+                    key: 'statusSummary',
+                    label: 'Status / Phase',
+                    render: (r) => r.statusSummary ? <Badge tone="info">{r.statusSummary}</Badge> : '—',
+                  },
+                  {
+                    key: 'age',
+                    label: 'Age',
+                    render: (r) => r.age || age(r.creationTimestamp),
+                  },
+                ]}
+              />
+            )}
+          </>
+        ) : (
+          <YamlViewer resourceType="crd" name={data.name} />
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function CustomResourceDetail({ crd, instance, onClose }) {
+  const [tab, setTab] = useState('overview');
+  const detail = useResource(
+    () => api.customResource(
+      crd.group,
+      crd.version,
+      crd.plural,
+      instance.namespace,
+      instance.name,
+      crd.scope
+    ),
+    [crd.group, crd.version, crd.plural, instance.namespace, instance.name, crd.scope]
+  );
+
+  const [copied, setCopied] = useState(false);
+  const yamlResource = useResource(
+    () => api.customResourceYaml(
+      crd.group,
+      crd.version,
+      crd.plural,
+      instance.namespace,
+      instance.name,
+      crd.scope
+    ),
+    [crd.group, crd.version, crd.plural, instance.namespace, instance.name, crd.scope]
+  );
+
+  const handleCopy = () => {
+    if (yamlResource.data?.yaml) {
+      navigator.clipboard.writeText(yamlResource.data.yaml);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const data = detail.data || {};
+  const meta = data.metadata || {};
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <span className="eyebrow">{crd.kind} Instance</span>
+        <h2>{instance.name}</h2>
+
+        <div className="detail-tabs">
+          <button className={`detail-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
+            Overview
+          </button>
+          <button className={`detail-tab ${tab === 'yaml' ? 'active' : ''}`} onClick={() => setTab('yaml')}>
+            <FileCode size={14} /> YAML
+          </button>
+        </div>
+
+        {tab === 'overview' ? (
+          detail.loading ? (
+            <Loading rows={4} />
+          ) : detail.error ? (
+            <ErrorState error={detail.error} reload={detail.reload} />
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                <Badge tone="info">{crd.kind}</Badge>
+                {meta.namespace && <Badge tone="warning">{meta.namespace}</Badge>}
+                {crd.operator?.detected && <Badge tone="success">{crd.operator.name}</Badge>}
+              </div>
+
+              <KeyValues
+                values={{
+                  Name: meta.name || instance.name,
+                  ...(meta.namespace ? { Namespace: meta.namespace } : {}),
+                  'API Version': data.apiVersion || `${crd.group}/${crd.version}`,
+                  Kind: data.kind || crd.kind,
+                  UID: meta.uid || '—',
+                  Generation: meta.generation !== undefined ? String(meta.generation) : '—',
+                  Created: formatDate(meta.creationTimestamp),
+                  Age: instance.age || age(meta.creationTimestamp),
+                }}
+              />
+
+              {meta.labels && Object.keys(meta.labels).length > 0 && (
+                <>
+                  <h3>Labels</h3>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                    {Object.entries(meta.labels).map(([k, v]) => (
+                      <span key={k} className="anno-tag">{k}: {v}</span>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {data.spec && Object.keys(data.spec).length > 0 && (
+                <>
+                  <h3>Spec</h3>
+                  <pre className="json-block">{JSON.stringify(data.spec, null, 2)}</pre>
+                </>
+              )}
+
+              {data.status && Object.keys(data.status).length > 0 && (
+                <>
+                  <h3>Status</h3>
+                  <pre className="json-block">{JSON.stringify(data.status, null, 2)}</pre>
+                </>
+              )}
+            </>
+          )
+        ) : (
+          <div className="yaml-viewer-wrapper">
+            <div className="yaml-viewer-toolbar">
+              <div className="yaml-info">
+                <Badge tone="info">{crd.kind}</Badge>
+                <span className="yaml-version mono">{data.apiVersion || `${crd.group}/${crd.version}`}</span>
+              </div>
+              <div className="yaml-actions">
+                <button className="button subtle small" onClick={handleCopy} disabled={yamlResource.loading || !yamlResource.data?.yaml}>
+                  {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+                  <span>{copied ? 'Copied!' : 'Copy YAML'}</span>
+                </button>
+                <button className="button subtle small" onClick={yamlResource.reload} disabled={yamlResource.loading}>
+                  <RefreshCw size={14} className={yamlResource.loading ? 'spin' : ''} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+            </div>
+            {yamlResource.loading ? (
+              <div className="terminal loading-terminal">Loading YAML manifest...</div>
+            ) : yamlResource.error ? (
+              <ErrorState error={yamlResource.error} reload={yamlResource.reload} />
+            ) : (
+              <div className="yaml-pre-container">
+                <pre className="yaml-code mono"><code>{yamlResource.data?.yaml}</code></pre>
+              </div>
+            )}
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
 function Logs({ pod, onClose }) { const [container, setContainer] = useState(''); const [previous, setPrevious] = useState(false); const [tailLines, setTailLines] = useState(200); const [auto, setAuto] = useState(false); const resource = useResource(() => api.logs(pod.namespace, pod.name, { container, tailLines, previous }), [pod.namespace, pod.name, container, tailLines, previous, auto ? Date.now() : 0]); return <div className="log-modal"><div className="log-head"><div><span className="eyebrow">Pod logs</span><h3>{pod.name}</h3></div><button className="close-button" onClick={onClose}><X size={18} /></button></div><div className="log-controls"><input className="select" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="Container (optional)" /><input className="number-input" type="number" min="1" max="10000" value={tailLines} onChange={(e) => setTailLines(e.target.value)} /><label className="check"><input type="checkbox" checked={previous} onChange={(e) => setPrevious(e.target.checked)} /> Previous</label><label className="check"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto-refresh</label></div>{resource.loading ? <div className="terminal loading-terminal">Loading logs...</div> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <pre className="terminal">{resource.data?.logs || 'No log output returned.'}</pre>}</div>; }
 
 function App() {
@@ -889,6 +1443,7 @@ function App() {
   const isDeployments = page === 'deployments' || page === 'deployment';
   const isNodes = page === 'nodes' || page === 'node';
   const isNamespaces = page === 'namespaces' || page === 'namespace';
+  const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
 
   const title = isIngress
     ? 'Ingress'
@@ -902,6 +1457,8 @@ function App() {
     ? 'Nodes'
     : isNamespaces
     ? 'Namespaces'
+    : isOperators
+    ? 'Operators & CRDs'
     : nav.find((item) => item.key === page)?.label || (page === 'troubleshooting' ? 'Troubleshooting' : 'Overview');
 
   const content = page === 'overview'
@@ -918,6 +1475,8 @@ function App() {
     ? <Services key={currentCluster} onSelect={(service) => setSelected({ type: 'service', value: service })} />
     : isIngress
     ? <Ingresses key={currentCluster} onSelect={(item) => setSelected(item?.type ? item : { type: 'ingress', value: item })} />
+    : isOperators
+    ? <OperatorsView key={currentCluster} onSelectCRD={(crd) => setSelected({ type: 'crd', value: crd })} />
     : page === 'events'
     ? <Events key={currentCluster} />
     : <Troubleshooting key={currentCluster} />;
@@ -930,6 +1489,7 @@ function App() {
     if (key === 'deployments' && page === 'deployment') return true;
     if (key === 'nodes' && page === 'node') return true;
     if (key === 'namespaces' && page === 'namespace') return true;
+    if (key === 'operators' && (page === 'operator' || page === 'crds' || page === 'crd')) return true;
     return false;
   };
 
@@ -1001,6 +1561,20 @@ function App() {
       {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'httproute' && <HttpRouteDetail route={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'gateway' && <GatewayDetail gateway={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'crd' && (
+        <CRDDetail
+          crd={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectInstance={({ crd, instance }) => setSelected({ type: 'customresource', value: { crd, instance } })}
+        />
+      )}
+      {selected?.type === 'customresource' && (
+        <CustomResourceDetail
+          crd={selected.value.crd}
+          instance={selected.value.instance}
+          onClose={() => setSelected({ type: 'crd', value: selected.value.crd })}
+        />
+      )}
     </div>
   );
 }
@@ -1008,4 +1582,5 @@ function App() {
 function Troubleshooting() { const resource = useResource(api.troubleshooting); const groups = resource.data || {}; return <><PageHeader eyebrow="Observability" title="Troubleshooting" description="Actionable issues grouped by severity from backend diagnostics." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <div className="diagnostic-grid">{['critical', 'warning', 'info'].map((severity) => <section className="panel" key={severity}><div className="panel-head"><h2>{severity}</h2><Badge tone={severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'}>{groups[severity]?.length || 0}</Badge></div>{groups[severity]?.length ? <div className="issue-list">{groups[severity].map((issue, i) => <div className="issue" key={i}><div><strong>{issue.resourceName}</strong><span>{issue.message}</span><small>{issue.recommendation}</small></div></div>)}</div> : <Empty title={`No ${severity} issues`} text="No diagnostics were returned in this category." />}</section>)}</div>}</>; }
 
 export default App;
+
 

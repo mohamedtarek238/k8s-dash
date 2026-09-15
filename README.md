@@ -76,9 +76,16 @@ It connects directly to your active Kubernetes context using your local `kubecon
 - **Workloads (StatefulSets & DaemonSets)**:
   - Full API support for StatefulSets and DaemonSets with linked pods and events.
 
+### 📦 Kubernetes Operators & CRDs Explorer
+- **Dynamic CRD Discovery**: Auto-detects all CustomResourceDefinitions (`apiextensions.k8s.io/v1`) installed across the cluster without hardcoded operator schemas.
+- **Safe Operator Heuristic**: Accurately groups CRDs into logical operators (Prometheus Operator, Keycloak Operator, Kong Gateway, Confluent Operator, Trivy/Aqua, Cilium, OLM, Gateway API, cert-manager, etc.) via metadata labels, annotations, and API group matching.
+- **Custom Resource (CR) Browsing**: Browse live instances of both Namespaced and Cluster-scoped custom resources with metadata, spec, and status inspection.
+- **Multi-Cluster Aware**: Automatically scopes CRD discovery and custom resource querying to the active cluster context with cached discovery for high performance.
+- **Full Manifest YAML**: Dynamic YAML generation for both CRD definitions and individual Custom Resource instances.
+
 ### 📄 Live YAML Viewer
 - **Dynamic Manifest Generation**: View current Kubernetes objects directly from the control plane formatted as standard YAML via `js-yaml`.
-- **Supported Resources**: Pods, Deployments, Nodes, Namespaces, Services, Ingresses, HTTPRoutes, Gateways, GatewayClasses, KongPlugins, StatefulSets, and DaemonSets.
+- **Supported Resources**: Pods, Deployments, Nodes, Namespaces, Services, Ingresses, HTTPRoutes, Gateways, GatewayClasses, KongPlugins, CustomResourceDefinitions (CRDs), Custom Resources, StatefulSets, and DaemonSets.
 - **Field Fidelity**: Complete manifest preservation including `metadata`, `spec`, `status`, `labels`, `annotations`, `ownerReferences`, `finalizers`, and `conditions`.
 - **Developer Convenience**: Interactive slide-out drawer tab with one-click "Copy YAML" and live "Refresh" buttons.
 - **Read-Only Security**: Strictly inspection-only with zero mutation endpoints (no apply, update, patch, or delete). Sensitive resources like `secrets` are blocked.
@@ -332,6 +339,16 @@ All backend API routes are prefixed with `/api`.
 | `GET` | `/api/statefulsets/:namespace/:name` | `?includeRelated=&includeEvents=` | StatefulSet details and managed pods |
 | `GET` | `/api/daemonsets` | `?namespace=` | List DaemonSets |
 | `GET` | `/api/daemonsets/:namespace/:name` | `?includeRelated=&includeEvents=` | DaemonSet details and scheduled pods |
+| `GET` | `/api/operators` | — | Summary of detected operators and their associated CRDs |
+| `GET` | `/api/crds` | `?group=&search=` | List all discovered CRDs with filtering |
+| `GET` | `/api/crds/:name` | — | Detailed CRD definition, schema description, and conditions |
+| `GET` | `/api/crds/:name/yaml` | — | Dynamic YAML manifest of CustomResourceDefinition |
+| `GET` | `/api/crds/:group/:version/:plural` | — | Lookup CRD by coordinates |
+| `GET` | `/api/custom-resources/:group/:version/:plural` | `?namespace=&scope=` | List live custom resource instances |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:namespace/:name` | — | Namespaced custom resource details (spec & status) |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:name` | — | Cluster-scoped custom resource details |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:namespace/:name/yaml` | — | Namespaced custom resource live YAML manifest |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:name/yaml` | — | Cluster-scoped custom resource live YAML manifest |
 
 ### YAML Viewer Endpoints
 
@@ -346,12 +363,15 @@ Both **resource-specific** and **generic** YAML endpoints are provided. They are
 | `GET` | `/api/http-routes/:namespace/:name/yaml` | Namespaced | Gateway API HTTPRoute raw YAML manifest |
 | `GET` | `/api/gateways/:namespace/:name/yaml` | Namespaced | Gateway API Gateway raw YAML manifest |
 | `GET` | `/api/gateway-classes/:name/yaml` | Cluster | Gateway API GatewayClass raw YAML manifest |
+| `GET` | `/api/crds/:name/yaml` | Cluster | CustomResourceDefinition raw YAML manifest |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:namespace/:name/yaml` | Namespaced | Custom Resource live YAML manifest |
+| `GET` | `/api/custom-resources/:group/:version/:plural/:name/yaml` | Cluster | Cluster Custom Resource live YAML manifest |
 | `GET` | `/api/statefulsets/:namespace/:name/yaml` | Namespaced | StatefulSet raw YAML manifest |
 | `GET` | `/api/daemonsets/:namespace/:name/yaml` | Namespaced | DaemonSet raw YAML manifest |
 | `GET` | `/api/namespaces/:name/yaml` | Cluster | Namespace raw YAML manifest |
 | `GET` | `/api/nodes/:name/yaml` | Cluster | Node raw YAML manifest |
 | `GET` | `/api/resources/:resourceType/:namespace/:name/yaml` | Namespaced | Generic YAML for namespaced resources (`pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `kongplugins`, `statefulsets`, `daemonsets`) |
-| `GET` | `/api/resources/:resourceType/:name/yaml` | Cluster | Generic YAML for cluster resources (`nodes`, `namespaces`, `gatewayclasses`) |
+| `GET` | `/api/resources/:resourceType/:name/yaml` | Cluster | Generic YAML for cluster resources (`nodes`, `namespaces`, `gatewayclasses`, `crds`) |
 
 > **Security & Validation**: Supported resource types are strictly whitelisted: `pods`, `deployments`, `services`, `ingresses`, `httproutes`, `gateways`, `gatewayclasses`, `kongplugins`, `statefulsets`, `daemonsets`, `namespaces`, and `nodes`. Requests for sensitive types like `secrets` or unrecognized names return `400 Bad Request`.
 

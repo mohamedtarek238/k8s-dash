@@ -37,3 +37,18 @@
 .cluster-item-badge{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;background:var(--teal);color:#0b1c20;padding:1px 6px;border-radius:4px}
 .cluster-item-check{color:var(--teal);flex-shrink:0}
 @media(max-width:720px){.cluster-btn-text{max-width:100px}.cluster-dropdown-menu{right:-50px;min-width:280px}}
+
+/* Operators & CRD Explorer Styles */
+.operators-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-bottom:20px}
+.operator-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;cursor:pointer;transition:all .15s ease;display:flex;flex-direction:column;gap:12px;text-align:left}
+.operator-card:hover{border-color:var(--teal);background:var(--panel-2);transform:translateY(-2px)}
+.operator-card.active{border-color:var(--teal);background:#1c4a4c44;box-shadow:0 0 0 1px var(--teal)}
+.operator-card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.operator-card-title{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--text)}
+.operator-card-title svg{color:var(--teal);flex-shrink:0}
+.operator-card-group{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.operator-card-crds{display:flex;flex-wrap:wrap;gap:5px;margin-top:auto}
+.operator-crd-tag{font-size:10.5px;font-family:'DM Mono',monospace;background:#ffffff08;border:1px solid var(--border);padding:2px 7px;border-radius:4px;color:#b9e9d9}
+.crd-desc{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:6px}
+.schema-description{background:#090e14;border:1px solid #263544;border-radius:6px;padding:12px;font-size:11.5px;color:#b9e9d9;line-height:1.5;margin-top:8px}
+
