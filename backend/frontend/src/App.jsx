@@ -387,9 +387,12 @@ function Ingresses({ onSelect }) {
 
 function Events() { const [namespace, setNamespace] = useState(''); const [search, setSearch] = useState(''); const resource = useResource(() => api.events(namespace), [namespace]); const rows = (resource.data?.data || []).filter((r) => `${r.reason} ${r.message} ${r.involvedObject?.display}`.toLowerCase().includes(search.toLowerCase())); return <><PageHeader eyebrow="Observability" title="Events" description="Newest-first signals emitted by Kubernetes resources." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} /><Toolbar search={search} setSearch={setSearch} onRefresh={resource.reload}><input className="select" value={namespace} onChange={(e) => setNamespace(e.target.value)} placeholder="All namespaces" /></Toolbar>{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <EventTable events={rows} />}</>; }
 
-function YamlViewer({ resourceType, namespace, name }) {
+function YamlViewer({ resourceType, namespace, name, loader }) {
   const [copied, setCopied] = useState(false);
-  const resource = useResource(() => api.yaml(resourceType, namespace, name), [resourceType, namespace, name]);
+  const resource = useResource(
+    () => (loader ? loader() : api.yaml(resourceType, namespace, name)),
+    [resourceType, namespace, name, loader]
+  );
 
   const handleCopy = () => {
     if (resource.data?.yaml) {
@@ -1280,27 +1283,6 @@ function CustomResourceDetail({ crd, instance, onClose }) {
     [crd.group, crd.version, crd.plural, instance.namespace, instance.name, crd.scope]
   );
 
-  const [copied, setCopied] = useState(false);
-  const yamlResource = useResource(
-    () => api.customResourceYaml(
-      crd.group,
-      crd.version,
-      crd.plural,
-      instance.namespace,
-      instance.name,
-      crd.scope
-    ),
-    [crd.group, crd.version, crd.plural, instance.namespace, instance.name, crd.scope]
-  );
-
-  const handleCopy = () => {
-    if (yamlResource.data?.yaml) {
-      navigator.clipboard.writeText(yamlResource.data.yaml);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
   const data = detail.data || {};
   const meta = data.metadata || {};
 
@@ -1373,33 +1355,18 @@ function CustomResourceDetail({ crd, instance, onClose }) {
             </>
           )
         ) : (
-          <div className="yaml-viewer-wrapper">
-            <div className="yaml-viewer-toolbar">
-              <div className="yaml-info">
-                <Badge tone="info">{crd.kind}</Badge>
-                <span className="yaml-version mono">{data.apiVersion || `${crd.group}/${crd.version}`}</span>
-              </div>
-              <div className="yaml-actions">
-                <button className="button subtle small" onClick={handleCopy} disabled={yamlResource.loading || !yamlResource.data?.yaml}>
-                  {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
-                  <span>{copied ? 'Copied!' : 'Copy YAML'}</span>
-                </button>
-                <button className="button subtle small" onClick={yamlResource.reload} disabled={yamlResource.loading}>
-                  <RefreshCw size={14} className={yamlResource.loading ? 'spin' : ''} />
-                  <span>Refresh</span>
-                </button>
-              </div>
-            </div>
-            {yamlResource.loading ? (
-              <div className="terminal loading-terminal">Loading YAML manifest...</div>
-            ) : yamlResource.error ? (
-              <ErrorState error={yamlResource.error} reload={yamlResource.reload} />
-            ) : (
-              <div className="yaml-pre-container">
-                <pre className="yaml-code mono"><code>{yamlResource.data?.yaml}</code></pre>
-              </div>
-            )}
-          </div>
+          <YamlViewer
+            loader={() =>
+              api.customResourceYaml(
+                crd.group,
+                crd.version,
+                crd.plural,
+                instance.namespace,
+                instance.name,
+                crd.scope
+              )
+            }
+          />
         )}
       </aside>
     </div>

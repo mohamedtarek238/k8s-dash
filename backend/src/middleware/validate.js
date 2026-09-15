@@ -96,6 +96,8 @@ const resourceTypeSchema = z.enum([
   'gateways', 'gateway',
   'gatewayclasses', 'gatewayclass',
   'kongplugins', 'kongplugin',
+  'crds', 'crd',
+  'customresourcedefinition', 'customresourcedefinitions',
 ]);
 
 const genericNamespacedResourceParamsSchema = z.object({
