@@ -30,10 +30,37 @@ const statusTone = (value = '') => String(value).toLowerCase().replace('notready
 function useResource(loader, dependencies = []) {
   const [state, setState] = useState({ loading: true, data: null, error: null });
   const reload = () => {
-    setState({ loading: true, data: null, error: null });
-    loader().then((data) => setState({ loading: false, data, error: null })).catch((error) => setState({ loading: false, data: null, error }));
+    let cancelled = false;
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    Promise.resolve()
+      .then(() => loader())
+      .then((data) => {
+        if (!cancelled) setState({ loading: false, data, error: null });
+      })
+      .catch((error) => {
+        if (!cancelled) setState({ loading: false, data: null, error });
+      });
+    return () => {
+      cancelled = true;
+    };
   };
-  useEffect(reload, dependencies);
+
+  useEffect(() => {
+    let cancelled = false;
+    setState((prev) => (prev.loading ? prev : { ...prev, loading: true, error: null }));
+    Promise.resolve()
+      .then(() => loader())
+      .then((data) => {
+        if (!cancelled) setState({ loading: false, data, error: null });
+      })
+      .catch((error) => {
+        if (!cancelled) setState({ loading: false, data: null, error });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, dependencies);
+
   return { ...state, reload };
 }
 
@@ -119,14 +146,129 @@ function Toolbar({ search, setSearch, onRefresh, children }) { return <div class
 function Table({ columns, rows, onRow, emptyTitle }) { if (!rows.length) return <Empty title={emptyTitle} />; return <div className="table-wrap"><table><thead><tr>{columns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id || row.name || index} onClick={() => onRow?.(row)} className={onRow ? 'clickable' : ''}>{columns.map((column) => <td key={column.key}>{column.render ? column.render(row) : display(row[column.key])}</td>)}</tr>)}</tbody></table></div>; }
 function PageHeader({ eyebrow, title, description, action }) { return <div className="page-header"><div><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>{action}</div>; }
 
-function Overview({ cluster, health, events, loading, reload }) {
-  const c = cluster?.data; const recentEvents = (events?.data?.data || []).slice(0, 6); const issues = health?.data?.issues || [];
-  return <><PageHeader eyebrow="Cluster / telemetry" title="Operations overview" description="A live view of the resources returned by your Kubernetes control plane." action={<button className="button primary" onClick={reload}><RefreshCw size={16} /> Refresh data</button>} />
-    {loading ? <Loading rows={4} /> : <><div className="metrics-grid"><Metric icon={Gauge} label="Cluster health" value={c?.health?.status || health?.data?.status || 'Unknown'} detail={c?.health?.message || `${health?.data?.score ?? '—'} / 100 score`} accent="teal" /><Metric icon={Server} label="Nodes" value={c?.nodes?.total} detail={`${c?.nodes?.ready || 0} ready · ${c?.nodes?.notReady || 0} not ready`} accent="blue" /><Metric icon={Box} label="Pods" value={c?.pods} detail="All namespaces" accent="amber" /><Metric icon={Layers3} label="Namespaces" value={c?.namespaces} detail={`${c?.deployments ?? 0} deployments`} accent="coral" /></div>
-      <div className="split-grid"><section className="panel"><div className="panel-head"><div><span className="eyebrow">Control plane</span><h2>Cluster identity</h2></div><Badge tone="success">Connected</Badge></div><div className="identity-grid"><div><span>Context</span><strong>{display(c?.context)}</strong></div><div><span>Cluster</span><strong>{display(c?.cluster)}</strong></div><div><span>Server</span><strong>{display(c?.server)}</strong></div><div><span>Kubernetes</span><strong>{display(c?.version?.gitVersion || c?.version?.gitVersion)}</strong></div></div><div className="unsupported"><Gauge size={17} /><span>Live CPU and memory usage are not exposed by the backend. Capacity and allocatable values are available on the Nodes page.</span></div></section>
-        <section className="panel"><div className="panel-head"><div><span className="eyebrow">Signal</span><h2>Health findings</h2></div><button className="text-button" onClick={() => window.location.hash = '#events'}>View events <ChevronRight size={15} /></button></div>{issues.length ? <div className="issue-list">{issues.slice(0, 5).map((issue, i) => <div className="issue" key={i}><Badge tone={issue.severity === 'critical' ? 'danger' : 'warning'}>{issue.severity}</Badge><div><strong>{issue.resourceName}</strong><span>{issue.message}</span></div></div>)}</div> : <Empty title="No active findings" text="Diagnostics returned a clean cluster signal." />}</section></div>
-      <section className="panel"><div className="panel-head"><div><span className="eyebrow">Recent activity</span><h2>Cluster events</h2></div><span className="muted">Newest first</span></div><EventTable events={recentEvents} /></section></>}
-  </>;
+function Overview({ currentCluster }) {
+  const cluster = useResource(api.cluster, [currentCluster]);
+  const health = useResource(api.health, [currentCluster]);
+  const events = useResource(api.events, [currentCluster]);
+  const reload = () => {
+    cluster.reload();
+    health.reload();
+    events.reload();
+  };
+  const loading = cluster.loading;
+  const c = cluster?.data;
+  const recentEvents = (events?.data?.data || []).slice(0, 6);
+  const issues = health?.data?.issues || [];
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Cluster / telemetry"
+        title="Operations overview"
+        description="A live view of the resources returned by your Kubernetes control plane."
+        action={
+          <button className="button primary" onClick={reload}>
+            <RefreshCw size={16} /> Refresh data
+          </button>
+        }
+      />
+      {loading ? (
+        <Loading rows={4} />
+      ) : cluster.error ? (
+        <ErrorState error={cluster.error} reload={reload} />
+      ) : (
+        <>
+          <div className="metrics-grid">
+            <Metric
+              icon={Gauge}
+              label="Cluster health"
+              value={c?.health?.status || health?.data?.status || 'Unknown'}
+              detail={c?.health?.message || `${health?.data?.score ?? '—'} / 100 score`}
+              accent="teal"
+            />
+            <Metric
+              icon={Server}
+              label="Nodes"
+              value={c?.nodes?.total}
+              detail={`${c?.nodes?.ready || 0} ready · ${c?.nodes?.notReady || 0} not ready`}
+              accent="blue"
+            />
+            <Metric
+              icon={Box}
+              label="Pods"
+              value={c?.pods}
+              detail="All namespaces"
+              accent="amber"
+            />
+            <Metric
+              icon={Layers3}
+              label="Namespaces"
+              value={c?.namespaces}
+              detail={`${c?.deployments ?? 0} deployments`}
+              accent="coral"
+            />
+          </div>
+          <div className="split-grid">
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Control plane</span>
+                  <h2>Cluster identity</h2>
+                </div>
+                <Badge tone="success">Connected</Badge>
+              </div>
+              <div className="identity-grid">
+                <div><span>Context</span><strong>{display(c?.context)}</strong></div>
+                <div><span>Cluster</span><strong>{display(c?.cluster)}</strong></div>
+                <div><span>Server</span><strong>{display(c?.server)}</strong></div>
+                <div><span>Kubernetes</span><strong>{display(c?.version?.gitVersion || c?.version?.major)}</strong></div>
+              </div>
+              <div className="unsupported">
+                <Gauge size={17} />
+                <span>Live CPU and memory usage are not exposed by the backend. Capacity and allocatable values are available on the Nodes page.</span>
+              </div>
+            </section>
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Signal</span>
+                  <h2>Health findings</h2>
+                </div>
+                <button className="text-button" onClick={() => (window.location.hash = '#events')}>
+                  View events <ChevronRight size={15} />
+                </button>
+              </div>
+              {issues.length ? (
+                <div className="issue-list">
+                  {issues.slice(0, 5).map((issue, i) => (
+                    <div className="issue" key={i}>
+                      <Badge tone={issue.severity === 'critical' ? 'danger' : 'warning'}>{issue.severity}</Badge>
+                      <div>
+                        <strong>{issue.resourceName}</strong>
+                        <span>{issue.message}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Empty title="No active findings" text="Diagnostics returned a clean cluster signal." />
+              )}
+            </section>
+          </div>
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Recent activity</span>
+                <h2>Cluster events</h2>
+              </div>
+              <span className="muted">Newest first</span>
+            </div>
+            <EventTable events={recentEvents} />
+          </section>
+        </>
+      )}
+    </>
+  );
 }
 
 function EventTable({ events }) { return <Table rows={events} emptyTitle="No recent events" columns={[{ key: 'type', label: 'Type', render: (r) => <Badge tone={r.type === 'Warning' ? 'warning' : 'info'}>{r.type || 'Normal'}</Badge> }, { key: 'reason', label: 'Reason' }, { key: 'involvedObject', label: 'Object', render: (r) => <span className="mono">{r.involvedObject?.display || '—'}</span> }, { key: 'message', label: 'Message', render: (r) => <span className="truncate">{r.message}</span> }, { key: 'lastTimestamp', label: 'Last seen', render: (r) => formatDate(r.lastTimestamp || r.firstTimestamp) }]} />; }
@@ -1434,213 +1576,6 @@ function CustomResourceDetail({ crd, instance, onClose }) {
 
 function Logs({ pod, onClose }) { const [container, setContainer] = useState(''); const [previous, setPrevious] = useState(false); const [tailLines, setTailLines] = useState(200); const [auto, setAuto] = useState(false); const resource = useResource(() => api.logs(pod.namespace, pod.name, { container, tailLines, previous }), [pod.namespace, pod.name, container, tailLines, previous, auto ? Date.now() : 0]); return <div className="log-modal"><div className="log-head"><div><span className="eyebrow">Pod logs</span><h3>{pod.name}</h3></div><button className="close-button" onClick={onClose}><X size={18} /></button></div><div className="log-controls"><input className="select" value={container} onChange={(e) => setContainer(e.target.value)} placeholder="Container (optional)" /><input className="number-input" type="number" min="1" max="10000" value={tailLines} onChange={(e) => setTailLines(e.target.value)} /><label className="check"><input type="checkbox" checked={previous} onChange={(e) => setPrevious(e.target.checked)} /> Previous</label><label className="check"><input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} /> Auto-refresh</label></div>{resource.loading ? <div className="terminal loading-terminal">Loading logs...</div> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <pre className="terminal">{resource.data?.logs || 'No log output returned.'}</pre>}</div>; }
 
-function App() {
-  const [page, setPage] = useState(window.location.hash.slice(1) || 'overview');
-  const [dark, setDark] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
-  const [selected, setSelected] = useState(null);
-  const [currentCluster, setCurrentCluster] = useState(() => api.getCluster());
-
-  useEffect(() => {
-    const onHash = () => setPage(window.location.hash.slice(1) || 'overview');
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, []);
-
-  const cluster = useResource(api.cluster, [currentCluster]);
-  const health = useResource(api.health, [currentCluster]);
-  const events = useResource(api.events, [currentCluster]);
-  const status = useResource(api.status, [currentCluster]);
-  const overviewReload = () => {
-    cluster.reload();
-    health.reload();
-    events.reload();
-    status.reload();
-  };
-
-  const handleClusterChange = (newClusterId) => {
-    setCurrentCluster(newClusterId);
-    setSelected(null);
-  };
-
-  const isIngress = page === 'ingresses' || page === 'ingress';
-  const isServices = page === 'services' || page === 'service';
-  const isPods = page === 'pods' || page === 'pod';
-  const isDeployments = page === 'deployments' || page === 'deployment';
-  const isNodes = page === 'nodes' || page === 'node';
-  const isNamespaces = page === 'namespaces' || page === 'namespace';
-  const isStorage = page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'csidriver' || page === 'volumesnapshots' || page === 'volumesnapshot';
-  const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
-
-  const title = isIngress
-    ? 'Ingress'
-    : isServices
-    ? 'Services'
-    : isPods
-    ? 'Pods'
-    : isDeployments
-    ? 'Deployments'
-    : isNodes
-    ? 'Nodes'
-    : isNamespaces
-    ? 'Namespaces'
-    : isOperators
-    ? 'Operators & CRDs'
-    : nav.find((item) => item.key === page)?.label || (page === 'troubleshooting' ? 'Troubleshooting' : 'Overview');
-
-  const content = page === 'overview'
-    ? <Overview key={currentCluster} cluster={cluster} health={health} events={events} loading={cluster.loading} reload={overviewReload} />
-    : isNodes
-    ? <Nodes key={currentCluster} onSelect={(node) => setSelected({ type: 'node', value: node })} />
-    : isNamespaces
-    ? <Namespaces key={currentCluster} onSelect={(namespace) => setSelected({ type: 'namespace', value: namespace })} />
-    : isPods
-    ? <Pods key={currentCluster} onSelect={(pod) => setSelected({ type: 'pod', value: pod })} />
-    : isDeployments
-    ? <Deployments key={currentCluster} onSelect={(deployment) => setSelected({ type: 'deployment', value: deployment })} />
-    : isServices
-    ? <Services key={currentCluster} onSelect={(service) => setSelected({ type: 'service', value: service })} />
-    : isIngress
-    ? <Ingresses key={currentCluster} onSelect={(item) => setSelected(item?.type ? item : { type: 'ingress', value: item })} />
-    : isOperators
-    ? <OperatorsView key={currentCluster} onSelectCRD={(crd) => setSelected({ type: 'crd', value: crd })} />
-    : page === 'events'
-    ? <Events key={currentCluster} />
-    : <Troubleshooting key={currentCluster} />;
-
-  const isNavActive = (key) => {
-    if (page === key) return true;
-    if (key === 'ingresses' && page === 'ingress') return true;
-    if (key === 'services' && page === 'service') return true;
-    if (key === 'pods' && page === 'pod') return true;
-    if (key === 'deployments' && page === 'deployment') return true;
-    if (key === 'nodes' && page === 'node') return true;
-    if (key === 'namespaces' && page === 'namespace') return true;
-    if (key === 'storage' && (page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'csidriver' || page === 'volumesnapshots' || page === 'volumesnapshot')) return true;
-    if (key === 'operators' && (page === 'operator' || page === 'crds' || page === 'crd')) return true;
-    return false;
-  };
-
-  return (
-    <div className={dark ? 'app dark' : 'app'}>
-      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
-        <div className="brand">
-          <div className="brand-mark"><Zap size={19} /></div>
-          {!collapsed && <div><strong>Cluster</strong><span>Console</span></div>}
-        </div>
-        <button className="collapse" onClick={() => setCollapsed(!collapsed)}>
-          {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-        </button>
-        <nav>
-          {nav.map(({ key, label, icon: Icon }) => (
-            <a
-              className={isNavActive(key) ? 'active' : ''}
-              href={`#${key}`}
-              key={key}
-              title={collapsed ? label : undefined}
-            >
-              <Icon size={18} />
-              {!collapsed && <span>{label}</span>}
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          {!collapsed && (
-            <div className="connection">
-              <span className={`pulse ${status.data?.kubernetes === 'connected' ? 'online' : ''}`} />
-              <div>
-                <strong>{status.data?.kubernetes === 'connected' ? 'Backend connected' : 'Checking backend'}</strong>
-                <span>{api.url}</span>
-              </div>
-            </div>
-          )}
-          <button className="theme-button" onClick={() => setDark(!dark)}>
-            {dark ? <Sun size={17} /> : <Moon size={17} />}
-            {!collapsed && <span>{dark ? 'Light theme' : 'Dark theme'}</span>}
-          </button>
-        </div>
-      </aside>
-      <main className="main">
-        <header className="topbar">
-          <button className="mobile-menu" onClick={() => setCollapsed(!collapsed)}>
-            <Menu size={19} />
-          </button>
-          <div>
-            <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
-            <strong>{title}</strong>
-          </div>
-          <div className="top-actions">
-            <ClusterSwitcher clusterId={currentCluster} onClusterChange={handleClusterChange} />
-            <Badge tone={status.data?.kubernetes === 'connected' ? 'success' : 'warning'}>
-              {status.data?.kubernetes || 'checking'}
-            </Badge>
-            <button className="icon-button" title="Settings">
-              <Settings2 size={17} />
-            </button>
-          </div>
-        </header>
-        <div className="content">{content}</div>
-      </main>
-      {selected?.type === 'node' && <NodeDetail node={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'namespace' && <NamespaceDetail namespace={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'pod' && <PodDetail pod={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'deployment' && <DeploymentDetail deployment={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'service' && <ServiceDetail service={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'httproute' && <HttpRouteDetail route={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'gateway' && <GatewayDetail gateway={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'pv' && (
-        <PVDetail
-          pv={selected.value}
-          onClose={() => setSelected(null)}
-          onSelectPVC={(claim) => setSelected({ type: 'pvc', value: claim })}
-          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
-        />
-      )}
-      {selected?.type === 'pvc' && (
-        <PVCDetail
-          pvc={selected.value}
-          onClose={() => setSelected(null)}
-          onSelectPV={(pvName) => setSelected({ type: 'pv', value: { name: pvName } })}
-          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
-        />
-      )}
-      {selected?.type === 'storageclass' && (
-        <StorageClassDetail
-          storageClass={selected.value}
-          onClose={() => setSelected(null)}
-        />
-      )}
-      {selected?.type === 'csidriver' && (
-        <CSIDriverDetail
-          driver={selected.value}
-          onClose={() => setSelected(null)}
-        />
-      )}
-      {selected?.type === 'volumesnapshot' && (
-        <VolumeSnapshotDetail
-          snapshot={selected.value}
-          onClose={() => setSelected(null)}
-        />
-      )}
-      {selected?.type === 'crd' && (
-        <CRDDetail
-          crd={selected.value}
-          onClose={() => setSelected(null)}
-          onSelectInstance={({ crd, instance }) => setSelected({ type: 'customresource', value: { crd, instance } })}
-        />
-      )}
-      {selected?.type === 'customresource' && (
-        <CustomResourceDetail
-          crd={selected.value.crd}
-          instance={selected.value.instance}
-          onClose={() => setSelected({ type: 'crd', value: selected.value.crd })}
-        />
-      )}
-    </div>
-  );
-}
-
 
 // ---------------------------------------------------------------------------
 // Storage Explorer Components
@@ -1689,6 +1624,7 @@ function StorageRelationshipFlow({ storageClass, pvc, pv, csiDriver, onSelectPV,
 }
 
 function StorageView({ onSelectPV, onSelectPVC, onSelectSC, onSelectCSI, onSelectSnapshot }) {
+  console.log("[STORAGE DEBUG] StoragePage rendered");
   const [activeTab, setActiveTab] = useState('overview');
   const [namespace, setNamespace] = useState('');
   const [search, setSearch] = useState('');
@@ -2467,8 +2403,239 @@ function VolumeSnapshotDetail({ snapshot, onClose }) {
   );
 }
 
-function Troubleshooting() { const resource = useResource(api.troubleshooting); const groups = resource.data || {}; return <><PageHeader eyebrow="Observability" title="Troubleshooting" description="Actionable issues grouped by severity from backend diagnostics." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <div className="diagnostic-grid">{['critical', 'warning', 'info'].map((severity) => <section className="panel" key={severity}><div className="panel-head"><h2>{severity}</h2><Badge tone={severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'}>{groups[severity]?.length || 0}</Badge></div>{groups[severity]?.length ? <div className="issue-list">{groups[severity].map((issue, i) => <div className="issue" key={i}><div><strong>{issue.resourceName}</strong><span>{issue.message}</span><small>{issue.recommendation}</small></div></div>)}</div> : <Empty title={`No ${severity} issues`} text="No diagnostics were returned in this category." />}</section>)}</div>}</>; }
+
+function Troubleshooting() {
+  console.log("[TROUBLESHOOTING DEBUG] TroubleshootingPage rendered");
+  const resource = useResource(api.troubleshooting); const groups = resource.data || {}; return <><PageHeader eyebrow="Observability" title="Troubleshooting" description="Actionable issues grouped by severity from backend diagnostics." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <div className="diagnostic-grid">{['critical', 'warning', 'info'].map((severity) => <section className="panel" key={severity}><div className="panel-head"><h2>{severity}</h2><Badge tone={severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'}>{groups[severity]?.length || 0}</Badge></div>{groups[severity]?.length ? <div className="issue-list">{groups[severity].map((issue, i) => <div className="issue" key={i}><div><strong>{issue.resourceName}</strong><span>{issue.message}</span><small>{issue.recommendation}</small></div></div>)}</div> : <Empty title={`No ${severity} issues`} text="No diagnostics were returned in this category." />}</section>)}</div>}</>; }
+
+function getPageFromLocation() {
+  const hash = (window.location.hash || '').replace(/^#\/?/, '').split('?')[0].trim();
+  if (hash) return hash;
+  const path = (window.location.pathname || '').replace(/^\//, '').split('?')[0].trim();
+  if (path) return path;
+  return 'overview';
+}
+
+function App() {
+  const [page, setPage] = useState(getPageFromLocation);
+  const [dark, setDark] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [currentCluster, setCurrentCluster] = useState(() => api.getCluster());
+
+  useEffect(() => {
+    const onRoute = () => setPage(getPageFromLocation());
+    window.addEventListener('hashchange', onRoute);
+    window.addEventListener('popstate', onRoute);
+    return () => {
+      window.removeEventListener('hashchange', onRoute);
+      window.removeEventListener('popstate', onRoute);
+    };
+  }, []);
+
+  const status = useResource(api.status, [currentCluster]);
+
+  const handleClusterChange = (newClusterId) => {
+    setCurrentCluster(newClusterId);
+    setSelected(null);
+  };
+
+  const isOverview = page === '' || page === 'overview';
+  const isNodes = page === 'nodes' || page === 'node';
+  const isNamespaces = page === 'namespaces' || page === 'namespace';
+  const isPods = page === 'pods' || page === 'pod';
+  const isDeployments = page === 'deployments' || page === 'deployment';
+  const isServices = page === 'services' || page === 'service';
+  const isIngress = page === 'ingresses' || page === 'ingress';
+  const isStorage = page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot';
+  const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
+  const isEvents = page === 'events' || page === 'event';
+  const isTroubleshooting = page === 'troubleshooting';
+
+  const title = isStorage
+    ? 'Storage'
+    : isTroubleshooting
+    ? 'Troubleshooting'
+    : isOperators
+    ? 'Operators & CRDs'
+    : isEvents
+    ? 'Events'
+    : isIngress
+    ? 'Ingress'
+    : isServices
+    ? 'Services'
+    : isPods
+    ? 'Pods'
+    : isDeployments
+    ? 'Deployments'
+    : isNodes
+    ? 'Nodes'
+    : isNamespaces
+    ? 'Namespaces'
+    : 'Overview';
+
+  const content = isStorage
+    ? <StorageView
+        key={currentCluster}
+        onSelectPV={(pv) => setSelected({ type: 'pv', value: pv })}
+        onSelectPVC={(pvc) => setSelected({ type: 'pvc', value: pvc })}
+        onSelectSC={(sc) => setSelected({ type: 'storageclass', value: sc })}
+        onSelectCSI={(csi) => setSelected({ type: 'csidriver', value: csi })}
+        onSelectSnapshot={(snap) => setSelected({ type: 'volumesnapshot', value: snap })}
+      />
+    : isTroubleshooting
+    ? <Troubleshooting key={currentCluster} />
+    : isOperators
+    ? <OperatorsView key={currentCluster} onSelectCRD={(crd) => setSelected({ type: 'crd', value: crd })} />
+    : isEvents
+    ? <Events key={currentCluster} />
+    : isNodes
+    ? <Nodes key={currentCluster} onSelect={(node) => setSelected({ type: 'node', value: node })} />
+    : isNamespaces
+    ? <Namespaces key={currentCluster} onSelect={(namespace) => setSelected({ type: 'namespace', value: namespace })} />
+    : isPods
+    ? <Pods key={currentCluster} onSelect={(pod) => setSelected({ type: 'pod', value: pod })} />
+    : isDeployments
+    ? <Deployments key={currentCluster} onSelect={(deployment) => setSelected({ type: 'deployment', value: deployment })} />
+    : isServices
+    ? <Services key={currentCluster} onSelect={(service) => setSelected({ type: 'service', value: service })} />
+    : isIngress
+    ? <Ingresses key={currentCluster} onSelect={(item) => setSelected(item?.type ? item : { type: 'ingress', value: item })} />
+    : <Overview key={currentCluster} currentCluster={currentCluster} />;
+
+  const isNavActive = (key) => {
+    if (key === 'overview' && (page === 'overview' || page === '')) return true;
+    if (key === 'nodes' && (page === 'nodes' || page === 'node')) return true;
+    if (key === 'namespaces' && (page === 'namespaces' || page === 'namespace')) return true;
+    if (key === 'pods' && (page === 'pods' || page === 'pod')) return true;
+    if (key === 'deployments' && (page === 'deployments' || page === 'deployment')) return true;
+    if (key === 'services' && (page === 'services' || page === 'service')) return true;
+    if (key === 'ingresses' && (page === 'ingresses' || page === 'ingress')) return true;
+    if (key === 'storage' && (page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot')) return true;
+    if (key === 'operators' && (page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd')) return true;
+    if (key === 'events' && (page === 'events' || page === 'event')) return true;
+    if (key === 'troubleshooting' && page === 'troubleshooting') return true;
+    return page === key;
+  };
+
+  return (
+    <div className={dark ? 'app dark' : 'app'}>
+      <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
+        <div className="brand">
+          <div className="brand-mark"><Zap size={19} /></div>
+          {!collapsed && <div><strong>Cluster</strong><span>Console</span></div>}
+        </div>
+        <button className="collapse" onClick={() => setCollapsed(!collapsed)}>
+          {collapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+        </button>
+        <nav>
+          {nav.map(({ key, label, icon: Icon }) => (
+            <a
+              className={isNavActive(key) ? 'active' : ''}
+              href={`#${key}`}
+              key={key}
+              title={collapsed ? label : undefined}
+            >
+              <Icon size={18} />
+              {!collapsed && <span>{label}</span>}
+            </a>
+          ))}
+        </nav>
+        <div className="sidebar-bottom">
+          {!collapsed && (
+            <div className="connection">
+              <span className={`pulse ${status.data?.kubernetes === 'connected' ? 'online' : ''}`} />
+              <div>
+                <strong>{status.data?.kubernetes === 'connected' ? 'Backend connected' : 'Checking backend'}</strong>
+                <span>{api.url}</span>
+              </div>
+            </div>
+          )}
+          <button className="theme-button" onClick={() => setDark(!dark)}>
+            {dark ? <Sun size={17} /> : <Moon size={17} />}
+            {!collapsed && <span>{dark ? 'Light theme' : 'Dark theme'}</span>}
+          </button>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="topbar">
+          <button className="mobile-menu" onClick={() => setCollapsed(!collapsed)}>
+            <Menu size={19} />
+          </button>
+          <div>
+            <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
+            <strong>{title}</strong>
+          </div>
+          <div className="top-actions">
+            <ClusterSwitcher clusterId={currentCluster} onClusterChange={handleClusterChange} />
+            <Badge tone={status.data?.kubernetes === 'connected' ? 'success' : 'warning'}>
+              {status.data?.kubernetes || 'checking'}
+            </Badge>
+            <button className="icon-button" title="Settings">
+              <Settings2 size={17} />
+            </button>
+          </div>
+        </header>
+        <div className="content">{content}</div>
+      </main>
+      {selected?.type === 'node' && <NodeDetail node={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'namespace' && <NamespaceDetail namespace={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'pod' && <PodDetail pod={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'deployment' && <DeploymentDetail deployment={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'service' && <ServiceDetail service={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'httproute' && <HttpRouteDetail route={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'gateway' && <GatewayDetail gateway={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'pv' && (
+        <PVDetail
+          pv={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectPVC={(claim) => setSelected({ type: 'pvc', value: claim })}
+          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
+        />
+      )}
+      {selected?.type === 'pvc' && (
+        <PVCDetail
+          pvc={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectPV={(pvName) => setSelected({ type: 'pv', value: { name: pvName } })}
+          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
+        />
+      )}
+      {selected?.type === 'storageclass' && (
+        <StorageClassDetail
+          storageClass={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'csidriver' && (
+        <CSIDriverDetail
+          driver={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'volumesnapshot' && (
+        <VolumeSnapshotDetail
+          snapshot={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'crd' && (
+        <CRDDetail
+          crd={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectInstance={({ crd, instance }) => setSelected({ type: 'customresource', value: { crd, instance } })}
+        />
+      )}
+      {selected?.type === 'customresource' && (
+        <CustomResourceDetail
+          crd={selected.value.crd}
+          instance={selected.value.instance}
+          onClose={() => setSelected({ type: 'crd', value: selected.value.crd })}
+        />
+      )}
+    </div>
+  );
+}
 
 export default App;
-
-
