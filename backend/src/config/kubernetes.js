@@ -40,11 +40,37 @@ function uniqueSlug(base, existing) {
   return `${base}-${i}`;
 }
 
+/**
+ * Splits an environment variable containing one or more kubeconfig paths.
+ * Supports comma (`,`) and semicolon (`;`) delimiters across OSes.
+ */
+function parseKubeconfigEnvPaths(envVal) {
+  if (!envVal || typeof envVal !== 'string') return [];
+  const rawParts = envVal
+    .split(/[,;]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const resolvedPaths = [];
+  for (const p of rawParts) {
+    if (p) {
+      resolvedPaths.push(path.resolve(p));
+    }
+  }
+  return resolvedPaths;
+}
+
 function resolveKubeconfigPath() {
   if (process.env.KUBECONFIG) {
-    const configuredPath = process.env.KUBECONFIG.split(path.delimiter)[0];
-    if (configuredPath && fs.existsSync(configuredPath)) {
-      return configuredPath;
+    const paths = parseKubeconfigEnvPaths(process.env.KUBECONFIG);
+    for (const p of paths) {
+      if (fs.existsSync(p)) return p;
+    }
+  }
+  if (process.env.KUBECONFIGS) {
+    const paths = parseKubeconfigEnvPaths(process.env.KUBECONFIGS);
+    for (const p of paths) {
+      if (fs.existsSync(p)) return p;
     }
   }
 
@@ -65,7 +91,7 @@ function assertValidKubeConfig(config) {
     throw new Error(
       kubeconfigPath
         ? `Invalid kubeconfig at ${kubeconfigPath}. Ensure current-context points to your cluster.`
-        : 'No kubeconfig found. Place your config at ~/.kube/config or set the KUBECONFIG environment variable.'
+        : 'No kubeconfig found. Place your config at ~/.kube/config or set the KUBECONFIG/KUBECONFIGS environment variable.'
     );
   }
 
@@ -97,7 +123,7 @@ function resolveServerForContext(kc, contextName) {
 // Multi-cluster initialization
 // ---------------------------------------------------------------------------
 
-function loadClusterFromKubeConfig(kc, contextName, usedIds) {
+function loadClusterFromKubeConfig(kc, contextName, usedIds, configPath = null) {
   // Clone the kubeconfig and set it to this context
   const cloneKc = new k8s.KubeConfig();
   cloneKc.loadFromString(kc.exportConfig());
@@ -109,12 +135,23 @@ function loadClusterFromKubeConfig(kc, contextName, usedIds) {
     return null;
   }
 
-  const id = uniqueSlug(slugify(contextName), usedIds);
+  const baseSlug = slugify(contextName);
+  const id = uniqueSlug(baseSlug, usedIds);
   usedIds.add(id);
+
+  let displayName = contextName;
+  if (id !== baseSlug && configPath) {
+    const parentDir = path.basename(path.dirname(configPath));
+    const fileName = path.basename(configPath);
+    const label = parentDir && parentDir !== '.' && !parentDir.startsWith('/') && !parentDir.includes(':')
+      ? parentDir
+      : fileName;
+    displayName = `${contextName} (${label})`;
+  }
 
   return {
     id,
-    name: contextName,
+    name: displayName,
     context: contextName,
     server,
     kubeConfig: cloneKc,
@@ -125,69 +162,83 @@ function loadClusterFromKubeConfig(kc, contextName, usedIds) {
 function initializeClusterRegistry() {
   if (registryInitialized) return;
 
-  const kubeconfigPaths = [];
   const usedIds = new Set();
+  const rawConfiguredPaths = [];
 
-  // Check KUBECONFIGS env (comma-separated)
+  // 1. Collect all paths from KUBECONFIGS and KUBECONFIG (both support comma/semicolon separation)
   if (process.env.KUBECONFIGS) {
-    const raw = process.env.KUBECONFIGS;
-    const paths = raw.split(',').map((p) => p.trim()).filter(Boolean);
-    for (const p of paths) {
-      const resolved = path.resolve(p);
-      if (fs.existsSync(resolved)) {
-        kubeconfigPaths.push(resolved);
+    rawConfiguredPaths.push(...parseKubeconfigEnvPaths(process.env.KUBECONFIGS));
+  }
+  if (process.env.KUBECONFIG) {
+    rawConfiguredPaths.push(...parseKubeconfigEnvPaths(process.env.KUBECONFIG));
+  }
+
+  // Deduplicate preserving order
+  const uniqueConfiguredPaths = Array.from(new Set(rawConfiguredPaths));
+
+  const existingPaths = [];
+  if (uniqueConfiguredPaths.length > 0) {
+    for (const p of uniqueConfiguredPaths) {
+      if (fs.existsSync(p)) {
+        existingPaths.push(p);
       } else {
-        console.warn(`[ClusterRegistry] Kubeconfig not found, skipping: ${resolved}`);
+        console.warn(`[ClusterRegistry] Kubeconfig not found, skipping: ${p}`);
       }
     }
-  }
 
-  // Fallback: single KUBECONFIG or default
-  if (kubeconfigPaths.length === 0) {
-    const singlePath = resolveKubeconfigPath();
-    if (singlePath) {
-      kubeconfigPaths.push(singlePath);
-    }
-  }
-
-  if (kubeconfigPaths.length === 0) {
-    // Try in-cluster
-    const kc = new k8s.KubeConfig();
-    kc.loadFromDefault();
-    assertValidKubeConfig(kc);
-    const contextName = kc.getCurrentContext();
-    const entry = loadClusterFromKubeConfig(kc, contextName, usedIds);
-    if (entry) {
-      clusterRegistry.set(entry.id, entry);
+    if (existingPaths.length === 0) {
+      throw new Error(
+        `Configured kubeconfig path(s) not found: ${uniqueConfiguredPaths.join(', ')}. Please check your KUBECONFIG or KUBECONFIGS environment variable.`
+      );
     }
   } else {
-    for (const configPath of kubeconfigPaths) {
+    // 2. Default ~/.kube/config fallback
+    const defaultPath = path.join(os.homedir(), '.kube', 'config');
+    if (fs.existsSync(defaultPath)) {
+      existingPaths.push(defaultPath);
+    }
+  }
+
+  // 3. Load kubeconfig files
+  if (existingPaths.length > 0) {
+    for (const configPath of existingPaths) {
       try {
         const kc = new k8s.KubeConfig();
         kc.loadFromFile(configPath);
 
-        // Load only the current-context from each file (per approved plan)
         const contextName = kc.getCurrentContext();
         if (!contextName) {
           console.warn(`[ClusterRegistry] No current-context in ${configPath}, skipping.`);
           continue;
         }
 
-        const entry = loadClusterFromKubeConfig(kc, contextName, usedIds);
+        const entry = loadClusterFromKubeConfig(kc, contextName, usedIds, configPath);
         if (entry) {
           clusterRegistry.set(entry.id, entry);
-          console.log(`[ClusterRegistry] Loaded cluster "${entry.id}" from ${configPath} (context: ${contextName})`);
+          console.log(`[ClusterRegistry] Loaded cluster "${entry.id}" (${entry.name}) from ${configPath} [${entry.server}]`);
         }
       } catch (err) {
         console.error(`[ClusterRegistry] Failed to load ${configPath}: ${err.message}`);
-        // Error isolation — skip bad files, don't crash
       }
+    }
+  } else {
+    // 4. In-cluster fallback
+    try {
+      const kc = new k8s.KubeConfig();
+      kc.loadFromCluster();
+      const contextName = kc.getCurrentContext() || 'in-cluster';
+      const entry = loadClusterFromKubeConfig(kc, contextName, usedIds);
+      if (entry) {
+        clusterRegistry.set(entry.id, entry);
+      }
+    } catch (_inClusterErr) {
+      // In-cluster unavailable
     }
   }
 
   if (clusterRegistry.size === 0) {
     throw new Error(
-      'No Kubernetes clusters could be loaded. Check your KUBECONFIGS or KUBECONFIG environment variable.'
+      'No Kubernetes clusters could be loaded. Ensure ~/.kube/config exists or set KUBECONFIG/KUBECONFIGS to valid kubeconfig file path(s).'
     );
   }
 

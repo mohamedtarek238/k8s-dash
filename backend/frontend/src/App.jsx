@@ -53,55 +53,54 @@ function ClusterSwitcher({ clusterId, onClusterChange }) {
   if (!items.length) return null;
 
   return (
-    <div className="cluster-switcher" style={{ position: 'relative' }}>
+    <div className="cluster-switcher">
       <button
-        className="cluster-switcher-btn"
+        className={`cluster-switcher-btn ${open ? 'open' : ''}`}
         onClick={() => setOpen(!open)}
-        style={{
-          display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
-          border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)',
-          color: 'var(--text)', cursor: 'pointer', fontSize: '13px', minWidth: '180px',
-          justifyContent: 'space-between',
-        }}
+        title="Switch active Kubernetes cluster"
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Database size={14} style={{ color: 'var(--teal)' }} />
-          <span style={{ fontWeight: 600 }}>{current?.name || 'Select cluster'}</span>
-        </span>
-        <ChevronDown size={14} style={{ opacity: 0.6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        <div className="cluster-btn-icon">
+          <Database size={14} />
+        </div>
+        <div className="cluster-btn-text">
+          <span className="cluster-btn-kicker">Cluster ({items.length})</span>
+          <span className="cluster-btn-name">{current?.name || 'Select cluster'}</span>
+        </div>
+        <ChevronDown size={14} className="cluster-btn-chevron" />
       </button>
+
       {open && (
         <>
-          <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
-          <div
-            className="cluster-dropdown"
-            style={{
-              position: 'absolute', top: '100%', left: 0, marginTop: '4px', zIndex: 100,
-              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '260px', overflow: 'hidden',
-            }}
-          >
-            <div style={{ padding: '8px 12px', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Available Clusters ({items.length})
+          <div className="cluster-dropdown-backdrop" onClick={() => setOpen(false)} />
+          <div className="cluster-dropdown-menu">
+            <div className="cluster-dropdown-head">
+              <span>Target Cluster</span>
+              <Badge tone="info">{items.length} Configured</Badge>
             </div>
-            {items.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => handleSelect(c.id)}
-                style={{
-                  display: 'flex', flexDirection: 'column', width: '100%', padding: '8px 12px',
-                  border: 'none', background: c.id === current?.id ? 'var(--hover)' : 'transparent',
-                  cursor: 'pointer', textAlign: 'left', color: 'var(--text)', fontSize: '13px',
-                  borderLeft: c.id === current?.id ? '3px solid var(--teal)' : '3px solid transparent',
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <strong>{c.name}</strong>
-                  {c.isDefault && <span style={{ fontSize: '10px', background: 'var(--teal)', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>default</span>}
-                </span>
-                <span style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{c.server}</span>
-              </button>
-            ))}
+            <div className="cluster-dropdown-list">
+              {items.map((c) => {
+                const isActive = c.id === current?.id;
+                return (
+                  <button
+                    key={c.id}
+                    className={`cluster-item ${isActive ? 'active' : ''}`}
+                    onClick={() => handleSelect(c.id)}
+                  >
+                    <div className="cluster-item-main">
+                      <Server size={14} className="cluster-item-icon" />
+                      <div className="cluster-item-info">
+                        <div className="cluster-item-title">
+                          <strong>{c.name}</strong>
+                          {c.isDefault && <span className="cluster-item-badge">default</span>}
+                        </div>
+                        <span className="cluster-item-server">{c.server}</span>
+                      </div>
+                    </div>
+                    {isActive && <Check size={14} className="cluster-item-check" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </>
       )}
@@ -978,14 +977,12 @@ function App() {
           <button className="mobile-menu" onClick={() => setCollapsed(!collapsed)}>
             <Menu size={19} />
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div>
-              <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
-              <strong>{cluster.data?.context || 'Connecting to cluster...'}</strong>
-            </div>
-            <ClusterSwitcher clusterId={currentCluster} onClusterChange={handleClusterChange} />
+          <div>
+            <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
+            <strong>{title}</strong>
           </div>
           <div className="top-actions">
+            <ClusterSwitcher clusterId={currentCluster} onClusterChange={handleClusterChange} />
             <Badge tone={status.data?.kubernetes === 'connected' ? 'success' : 'warning'}>
               {status.data?.kubernetes || 'checking'}
             </Badge>
