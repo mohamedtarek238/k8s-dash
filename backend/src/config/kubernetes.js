@@ -107,6 +107,7 @@ function createClientsFromKubeConfig(kc) {
     appsV1Api: kc.makeApiClient(k8s.AppsV1Api),
     batchV1Api: kc.makeApiClient(k8s.BatchV1Api),
     networkingV1Api: kc.makeApiClient(k8s.NetworkingV1Api),
+    storageV1Api: kc.makeApiClient(k8s.StorageV1Api),
     customObjectsApi: kc.makeApiClient(k8s.CustomObjectsApi),
     apiextensionsV1Api: kc.makeApiClient(k8s.ApiextensionsV1Api),
     versionApi: kc.makeApiClient(k8s.VersionApi),

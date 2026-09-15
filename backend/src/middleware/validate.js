@@ -98,6 +98,13 @@ const resourceTypeSchema = z.enum([
   'kongplugins', 'kongplugin',
   'crds', 'crd',
   'customresourcedefinition', 'customresourcedefinitions',
+  'persistentvolumes', 'persistentvolume', 'pvs', 'pv',
+  'persistentvolumeclaims', 'persistentvolumeclaim', 'pvcs', 'pvc',
+  'storageclasses', 'storageclass', 'scs', 'sc',
+  'csidrivers', 'csidriver',
+  'volumesnapshots', 'volumesnapshot',
+  'volumesnapshotclasses', 'volumesnapshotclass',
+  'volumesnapshotcontents', 'volumesnapshotcontent',
 ]);
 
 const genericNamespacedResourceParamsSchema = z.object({
@@ -109,6 +116,11 @@ const genericNamespacedResourceParamsSchema = z.object({
 const genericClusterResourceParamsSchema = z.object({
   resourceType: resourceTypeSchema,
   name: z.string().trim().min(1),
+});
+
+const storageQuerySchema = z.object({
+  namespace: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
 });
 
 const crdQuerySchema = z.object({
@@ -155,6 +167,7 @@ module.exports = {
   resourceTypeSchema,
   genericNamespacedResourceParamsSchema,
   genericClusterResourceParamsSchema,
+  storageQuerySchema,
   crdQuerySchema,
   crdCoordinatesParamsSchema,
   customResourceListQuerySchema,

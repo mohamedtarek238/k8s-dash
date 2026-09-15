@@ -110,6 +110,34 @@ export const api = {
     }
     return data(`/api/custom-resources/${encodeURIComponent(group)}/${encodeURIComponent(version)}/${encodeURIComponent(plural)}/${encodeURIComponent(name)}/yaml`);
   },
+  storageOverview: () => data('/api/storage/overview'),
+  persistentVolumes: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(`/api/storage/persistentvolumes${query.toString() ? `?${query}` : ''}`);
+  },
+  persistentVolume: (name) => data(`/api/storage/persistentvolumes/${encodeURIComponent(name)}?includeEvents=true`),
+  persistentVolumeClaims: (namespace, params = {}) => {
+    const query = new URLSearchParams();
+    if (namespace) query.set('namespace', namespace);
+    if (params.search) query.set('search', params.search);
+    return list(`/api/storage/persistentvolumeclaims${query.toString() ? `?${query}` : ''}`);
+  },
+  persistentVolumeClaim: (namespace, name) => data(`/api/storage/persistentvolumeclaims/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}?includeEvents=true`),
+  storageClasses: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(`/api/storage/storageclasses${query.toString() ? `?${query}` : ''}`);
+  },
+  storageClass: (name) => data(`/api/storage/storageclasses/${encodeURIComponent(name)}`),
+  csiDrivers: () => list('/api/storage/csidrivers'),
+  csiDriver: (name) => data(`/api/storage/csidrivers/${encodeURIComponent(name)}`),
+  volumeSnapshots: (namespace) => data(withNamespace('/api/storage/volumesnapshots', namespace)),
+  volumeSnapshot: (namespace, name) => data(`/api/storage/volumesnapshots/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}`),
+  volumeSnapshotClasses: () => data('/api/storage/volumesnapshotclasses'),
+  volumeSnapshotClass: (name) => data(`/api/storage/volumesnapshotclasses/${encodeURIComponent(name)}`),
+  volumeSnapshotContents: () => data('/api/storage/volumesnapshotcontents'),
+  volumeSnapshotContent: (name) => data(`/api/storage/volumesnapshotcontents/${encodeURIComponent(name)}`),
   yaml: (resourceType, namespace, name) => {
     const pluralMap = {
       pod: 'pods',
@@ -131,6 +159,26 @@ export const api = {
       crd: 'crds',
       crds: 'crds',
       customresourcedefinition: 'crds',
+      pv: 'persistentvolumes',
+      pvs: 'persistentvolumes',
+      persistentvolume: 'persistentvolumes',
+      persistentvolumes: 'persistentvolumes',
+      pvc: 'persistentvolumeclaims',
+      pvcs: 'persistentvolumeclaims',
+      persistentvolumeclaim: 'persistentvolumeclaims',
+      persistentvolumeclaims: 'persistentvolumeclaims',
+      sc: 'storageclasses',
+      scs: 'storageclasses',
+      storageclass: 'storageclasses',
+      storageclasses: 'storageclasses',
+      csidriver: 'csidrivers',
+      csidrivers: 'csidrivers',
+      volumesnapshot: 'volumesnapshots',
+      volumesnapshots: 'volumesnapshots',
+      volumesnapshotclass: 'volumesnapshotclasses',
+      volumesnapshotclasses: 'volumesnapshotclasses',
+      volumesnapshotcontent: 'volumesnapshotcontents',
+      volumesnapshotcontents: 'volumesnapshotcontents',
     };
     const canonical = pluralMap[resourceType?.toLowerCase()] || resourceType;
     if (!namespace) {

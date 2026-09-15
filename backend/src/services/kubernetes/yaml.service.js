@@ -272,6 +272,198 @@ const SUPPORTED_RESOURCES = {
     fetch: (clients, { name }) =>
       clients.apiextensionsV1Api.readCustomResourceDefinition({ name }),
   },
+  persistentvolume: {
+    canonical: 'persistentvolumes',
+    namespaced: false,
+    apiVersion: 'v1',
+    kind: 'PersistentVolume',
+    fetch: (clients, { name }) =>
+      clients.coreV1Api.readPersistentVolume({ name }),
+  },
+  persistentvolumes: {
+    canonical: 'persistentvolumes',
+    namespaced: false,
+    apiVersion: 'v1',
+    kind: 'PersistentVolume',
+    fetch: (clients, { name }) =>
+      clients.coreV1Api.readPersistentVolume({ name }),
+  },
+  pv: {
+    canonical: 'persistentvolumes',
+    namespaced: false,
+    apiVersion: 'v1',
+    kind: 'PersistentVolume',
+    fetch: (clients, { name }) =>
+      clients.coreV1Api.readPersistentVolume({ name }),
+  },
+  pvs: {
+    canonical: 'persistentvolumes',
+    namespaced: false,
+    apiVersion: 'v1',
+    kind: 'PersistentVolume',
+    fetch: (clients, { name }) =>
+      clients.coreV1Api.readPersistentVolume({ name }),
+  },
+  persistentvolumeclaim: {
+    canonical: 'persistentvolumeclaims',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'PersistentVolumeClaim',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedPersistentVolumeClaim({ name, namespace }),
+  },
+  persistentvolumeclaims: {
+    canonical: 'persistentvolumeclaims',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'PersistentVolumeClaim',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedPersistentVolumeClaim({ name, namespace }),
+  },
+  pvc: {
+    canonical: 'persistentvolumeclaims',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'PersistentVolumeClaim',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedPersistentVolumeClaim({ name, namespace }),
+  },
+  pvcs: {
+    canonical: 'persistentvolumeclaims',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'PersistentVolumeClaim',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedPersistentVolumeClaim({ name, namespace }),
+  },
+  storageclass: {
+    canonical: 'storageclasses',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readStorageClass({ name }),
+  },
+  storageclasses: {
+    canonical: 'storageclasses',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readStorageClass({ name }),
+  },
+  sc: {
+    canonical: 'storageclasses',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readStorageClass({ name }),
+  },
+  scs: {
+    canonical: 'storageclasses',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'StorageClass',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readStorageClass({ name }),
+  },
+  csidriver: {
+    canonical: 'csidrivers',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'CSIDriver',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readCSIDriver({ name }),
+  },
+  csidrivers: {
+    canonical: 'csidrivers',
+    namespaced: false,
+    apiVersion: 'storage.k8s.io/v1',
+    kind: 'CSIDriver',
+    fetch: (clients, { name }) =>
+      clients.storageV1Api.readCSIDriver({ name }),
+  },
+  volumesnapshot: {
+    canonical: 'volumesnapshots',
+    namespaced: true,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshot',
+    fetch: (clients, { namespace, name }) =>
+      clients.customObjectsApi.getNamespacedCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        namespace,
+        plural: 'volumesnapshots',
+        name,
+      }),
+  },
+  volumesnapshots: {
+    canonical: 'volumesnapshots',
+    namespaced: true,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshot',
+    fetch: (clients, { namespace, name }) =>
+      clients.customObjectsApi.getNamespacedCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        namespace,
+        plural: 'volumesnapshots',
+        name,
+      }),
+  },
+  volumesnapshotclass: {
+    canonical: 'volumesnapshotclasses',
+    namespaced: false,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshotClass',
+    fetch: (clients, { name }) =>
+      clients.customObjectsApi.getClusterCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        plural: 'volumesnapshotclasses',
+        name,
+      }),
+  },
+  volumesnapshotclasses: {
+    canonical: 'volumesnapshotclasses',
+    namespaced: false,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshotClass',
+    fetch: (clients, { name }) =>
+      clients.customObjectsApi.getClusterCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        plural: 'volumesnapshotclasses',
+        name,
+      }),
+  },
+  volumesnapshotcontent: {
+    canonical: 'volumesnapshotcontents',
+    namespaced: false,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshotContent',
+    fetch: (clients, { name }) =>
+      clients.customObjectsApi.getClusterCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        plural: 'volumesnapshotcontents',
+        name,
+      }),
+  },
+  volumesnapshotcontents: {
+    canonical: 'volumesnapshotcontents',
+    namespaced: false,
+    apiVersion: 'snapshot.storage.k8s.io/v1',
+    kind: 'VolumeSnapshotContent',
+    fetch: (clients, { name }) =>
+      clients.customObjectsApi.getClusterCustomObject({
+        group: 'snapshot.storage.k8s.io',
+        version: 'v1',
+        plural: 'volumesnapshotcontents',
+        name,
+      }),
+  },
 };
 
 /**

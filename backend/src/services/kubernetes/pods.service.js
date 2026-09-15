@@ -29,6 +29,65 @@ function mapPodSummary(pod) {
 }
 
 
+function formatPodVolumes(pod) {
+  const volumes = pod.spec?.volumes || [];
+  const containers = [...(pod.spec?.containers || []), ...(pod.spec?.initContainers || [])];
+
+  return volumes.map((v) => {
+    let type = 'other';
+    let reference = null;
+
+    if (v.persistentVolumeClaim) {
+      type = 'persistentVolumeClaim';
+      reference = v.persistentVolumeClaim.claimName;
+    } else if (v.configMap) {
+      type = 'configMap';
+      reference = v.configMap.name;
+    } else if (v.secret) {
+      type = 'secret';
+      reference = v.secret.secretName;
+    } else if (v.emptyDir) {
+      type = 'emptyDir';
+      reference = v.emptyDir.medium || 'disk';
+    } else if (v.hostPath) {
+      type = 'hostPath';
+      reference = v.hostPath.path;
+    } else if (v.csi) {
+      type = 'csi';
+      reference = v.csi.driver;
+    } else if (v.projected) {
+      type = 'projected';
+      reference = 'projected';
+    } else if (v.nfs) {
+      type = 'nfs';
+      reference = `${v.nfs.server}:${v.nfs.path}`;
+    }
+
+    const mounts = [];
+    containers.forEach((c) => {
+      (c.volumeMounts || []).forEach((vm) => {
+        if (vm.name === v.name) {
+          mounts.push({
+            container: c.name,
+            mountPath: vm.mountPath,
+            readOnly: Boolean(vm.readOnly),
+            subPath: vm.subPath || null,
+          });
+        }
+      });
+    });
+
+    return {
+      name: v.name,
+      type,
+      reference,
+      pvcName: v.persistentVolumeClaim?.claimName || null,
+      readOnly: Boolean(v.persistentVolumeClaim?.readOnly),
+      mounts,
+    };
+  });
+}
+
 function mapPodDetails(pod, events = []) {
   return {
     metadata: {
@@ -53,6 +112,7 @@ function mapPodDetails(pod, events = []) {
     restartCount: getPodRestartCount(pod),
     node: pod.spec?.nodeName || null,
     ip: pod.status?.podIP || null,
+    volumes: formatPodVolumes(pod),
     conditions: pod.status?.conditions || [],
     events: events.map((event) => ({
       namespace: event.metadata.namespace,

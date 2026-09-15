@@ -52,3 +52,21 @@
 .crd-desc{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:6px}
 .schema-description{background:#090e14;border:1px solid #263544;border-radius:6px;padding:12px;font-size:11.5px;color:#b9e9d9;line-height:1.5;margin-top:8px}
 
+/* Storage Explorer Styles */
+.storage-chain{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:16px 0}
+.storage-chain-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.storage-chain-card-header{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--text)}
+.storage-chain-card-header svg{color:var(--teal)}
+.storage-chain-card strong{font-size:14px;word-break:break-all}
+.storage-chain-card span{font-size:11px;color:var(--muted)}
+.storage-overview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-bottom:20px}
+.storage-overview-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:18px}
+.storage-overview-card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.storage-overview-card-header h3{margin:0;font-size:14px;display:flex;align-items:center;gap:8px}
+.storage-overview-card-header h3 svg{color:var(--teal)}
+.storage-breakdown-list{display:flex;flex-direction:column;gap:8px}
+.storage-breakdown-item{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:6px 0;border-bottom:1px solid #ffffff08}
+.storage-breakdown-item:last-child{border-bottom:none}
+.storage-breakdown-item span{color:var(--muted)}
+
+

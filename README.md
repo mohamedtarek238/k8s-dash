@@ -76,6 +76,16 @@ It connects directly to your active Kubernetes context using your local `kubecon
 - **Workloads (StatefulSets & DaemonSets)**:
   - Full API support for StatefulSets and DaemonSets with linked pods and events.
 
+### 💾 Kubernetes Storage Explorer
+- **Storage Overview**: Centralized summary with breakdown metrics for PV phases (`Bound`, `Available`, `Released`, `Failed`), PVC phases (`Bound`, `Pending`, `Lost`), Storage Classes, default StorageClass detection, and CSI drivers.
+- **Persistent Volumes (PV)**: List and inspect cluster-wide PVs with capacity, access modes (`RWO`, `ROX`, `RWX`, `RWOP`), reclaim policies (`Delete`, `Retain`, `Recycle`), storage class, bound claim reference, and CSI driver.
+- **Persistent Volume Claims (PVC)**: Explore namespaced PVCs with bound volume name, capacity, requested storage, access modes, storage class, and linked PV details.
+- **Storage Classes**: Discover dynamic provisioners, reclaim policies, volume binding modes (`Immediate`, `WaitForFirstConsumer`), allow volume expansion flags, mount options, and parameters.
+- **CSI Drivers**: Explore registered CSI storage plugins with attach requirements, pod info on mount flags, and supported volume lifecycle modes.
+- **Volume Snapshots**: Read-only exploration of `VolumeSnapshot`, `VolumeSnapshotClass`, and `VolumeSnapshotContent` with automatic graceful fallback when CRDs (`snapshot.storage.k8s.io`) are not installed.
+- **Storage Relationship Visualization**: Visual topology linking `StorageClass -> PVC -> Persistent Volume -> CSI Driver`.
+- **Pod Storage Inspection**: Pod detail drawer displays all mounted volumes (type, PVC name, container mount paths, readOnly status, and masked secrets).
+
 ### 📦 Kubernetes Operators & CRDs Explorer
 - **Dynamic CRD Discovery**: Auto-detects all CustomResourceDefinitions (`apiextensions.k8s.io/v1`) installed across the cluster without hardcoded operator schemas.
 - **Safe Operator Heuristic**: Accurately groups CRDs into logical operators (Prometheus Operator, Keycloak Operator, Kong Gateway, Confluent Operator, Trivy/Aqua, Cilium, OLM, Gateway API, cert-manager, etc.) via metadata labels, annotations, and API group matching.
@@ -349,6 +359,33 @@ All backend API routes are prefixed with `/api`.
 | `GET` | `/api/custom-resources/:group/:version/:plural/:name` | — | Cluster-scoped custom resource details |
 | `GET` | `/api/custom-resources/:group/:version/:plural/:namespace/:name/yaml` | — | Namespaced custom resource live YAML manifest |
 | `GET` | `/api/custom-resources/:group/:version/:plural/:name/yaml` | — | Cluster-scoped custom resource live YAML manifest |
+
+### Storage Endpoints
+
+| Method | Endpoint | Query Parameters | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/storage/overview` | `?cluster=` | Storage summary metrics (PV/PVC phase breakdowns, SCs, CSI Drivers) |
+| `GET` | `/api/storage/persistentvolumes` | `?search=&cluster=` | List Persistent Volumes with capacity and bound claim info |
+| `GET` | `/api/storage/persistentvolumes/:name` | `?includeEvents=&cluster=` | Persistent Volume details and linked PVC relationship |
+| `GET` | `/api/storage/persistentvolumes/:name/yaml` | `?cluster=` | Live YAML manifest for Persistent Volume |
+| `GET` | `/api/storage/persistentvolumeclaims` | `?namespace=&search=&cluster=` | List Persistent Volume Claims |
+| `GET` | `/api/storage/persistentvolumeclaims/:namespace/:name` | `?includeEvents=&cluster=` | PVC details, requested capacity, and bound PV relationship |
+| `GET` | `/api/storage/persistentvolumeclaims/:namespace/:name/yaml` | `?cluster=` | Live YAML manifest for Persistent Volume Claim |
+| `GET` | `/api/storage/storageclasses` | `?search=&cluster=` | List Storage Classes with provisioners and default flag |
+| `GET` | `/api/storage/storageclasses/:name` | `?cluster=` | Storage Class details, binding modes, and parameters |
+| `GET` | `/api/storage/storageclasses/:name/yaml` | `?cluster=` | Live YAML manifest for Storage Class |
+| `GET` | `/api/storage/csidrivers` | `?cluster=` | List registered CSI Drivers |
+| `GET` | `/api/storage/csidrivers/:name` | `?cluster=` | CSI Driver details and capability flags |
+| `GET` | `/api/storage/csidrivers/:name/yaml` | `?cluster=` | Live YAML manifest for CSI Driver |
+| `GET` | `/api/storage/volumesnapshots` | `?namespace=&cluster=` | List Volume Snapshots (with graceful fallback if CRD missing) |
+| `GET` | `/api/storage/volumesnapshots/:namespace/:name` | `?cluster=` | Volume Snapshot details |
+| `GET` | `/api/storage/volumesnapshots/:namespace/:name/yaml` | `?cluster=` | Live YAML manifest for Volume Snapshot |
+| `GET` | `/api/storage/volumesnapshotclasses` | `?cluster=` | List Volume Snapshot Classes |
+| `GET` | `/api/storage/volumesnapshotclasses/:name` | `?cluster=` | Volume Snapshot Class details |
+| `GET` | `/api/storage/volumesnapshotclasses/:name/yaml` | `?cluster=` | Live YAML manifest for Volume Snapshot Class |
+| `GET` | `/api/storage/volumesnapshotcontents` | `?cluster=` | List Volume Snapshot Contents |
+| `GET` | `/api/storage/volumesnapshotcontents/:name` | `?cluster=` | Volume Snapshot Content details |
+| `GET` | `/api/storage/volumesnapshotcontents/:name/yaml` | `?cluster=` | Live YAML manifest for Volume Snapshot Content |
 
 ### YAML Viewer Endpoints
 

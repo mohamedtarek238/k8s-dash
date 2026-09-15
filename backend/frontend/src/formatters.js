@@ -172,3 +172,38 @@ export function formatMemoryQuantity(quantity) {
   const rounded = parseFloat(gib.toFixed(2));
   return `${rounded} GiB`;
 }
+
+/**
+ * Format a Kubernetes storage quantity into an auto-scaled binary unit string
+ * (e.g. "500 MiB", "10 GiB", "1.5 TiB").
+ *
+ * @param {string|number|null|undefined} quantity - Raw storage quantity
+ * @returns {string} Formatted storage string
+ */
+export function formatStorageQuantity(quantity) {
+  if (quantity === null || quantity === undefined) {
+    return '—';
+  }
+
+  if (typeof quantity === 'string' && quantity.trim() === '') {
+    return '—';
+  }
+
+  const bytes = parseQuantityToBytes(quantity);
+  if (bytes === null || Number.isNaN(bytes)) {
+    return String(quantity);
+  }
+
+  if (bytes === 0) {
+    return '0 B';
+  }
+
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB'];
+  const k = 1024;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const unitIndex = Math.max(0, Math.min(i, units.length - 1));
+  const val = bytes / Math.pow(k, unitIndex);
+  const rounded = parseFloat(val.toFixed(2));
+  return `${rounded} ${units[unitIndex]}`;
+}
+

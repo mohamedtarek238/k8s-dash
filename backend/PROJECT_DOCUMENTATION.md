@@ -236,6 +236,33 @@ Pod log query values:
 | GET | `/api/daemonsets` | Optional `namespace` | Lists DaemonSets and scheduling/readiness counts |
 | GET | `/api/daemonsets/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed DaemonSet information including desired, scheduled, ready, available, unavailable, misscheduled counts, selector, updateStrategy, containers, volumes, conditions, and optionally selected pods and events |
 
+### Storage resources
+
+| Method | Path | Query/path parameters | Description |
+|---|---|---|---|
+| GET | `/api/storage/overview` | `?cluster=` | Returns cluster storage summary: PV phase breakdown, PVC phase breakdown, StorageClasses (total, default class), CSI drivers, and VolumeSnapshot availability |
+| GET | `/api/storage/persistentvolumes` | Query: `search`, `cluster` | Lists Persistent Volumes with capacity, access modes, reclaim policies, status, storage class, claim, and CSI driver |
+| GET | `/api/storage/persistentvolumes/:name` | Path: `name`<br>Query: `includeEvents`, `cluster` | Returns PV details, capacity, mount options, claimRef, and related PVC |
+| GET | `/api/storage/persistentvolumes/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Persistent Volume |
+| GET | `/api/storage/persistentvolumeclaims` | Query: `namespace`, `search`, `cluster` | Lists Persistent Volume Claims with volume name, status, capacity, and storage class |
+| GET | `/api/storage/persistentvolumeclaims/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeEvents`, `cluster` | Returns PVC details, requested capacity, volumeName, accessModes, storageClass, and related PV |
+| GET | `/api/storage/persistentvolumeclaims/:namespace/:name/yaml` | Path: `namespace`, `name`<br>Query: `cluster` | Returns live YAML manifest for Persistent Volume Claim |
+| GET | `/api/storage/storageclasses` | Query: `search`, `cluster` | Lists Storage Classes with provisioners, reclaim policies, volume binding modes, allow expansion flag, and default indicator |
+| GET | `/api/storage/storageclasses/:name` | Path: `name`<br>Query: `cluster` | Returns Storage Class details, provisioner, parameters, mount options, and topologies |
+| GET | `/api/storage/storageclasses/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Storage Class |
+| GET | `/api/storage/csidrivers` | Query: `cluster` | Lists registered CSI Drivers with attach requirements and lifecycle modes |
+| GET | `/api/storage/csidrivers/:name` | Path: `name`<br>Query: `cluster` | Returns CSI Driver details and capability flags |
+| GET | `/api/storage/csidrivers/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for CSI Driver |
+| GET | `/api/storage/volumesnapshots` | Query: `namespace`, `cluster` | Lists Volume Snapshots (with graceful fallback if snapshot CRD is not installed) |
+| GET | `/api/storage/volumesnapshots/:namespace/:name` | Path: `namespace`, `name`<br>Query: `cluster` | Returns Volume Snapshot details |
+| GET | `/api/storage/volumesnapshots/:namespace/:name/yaml` | Path: `namespace`, `name`<br>Query: `cluster` | Returns live YAML manifest for Volume Snapshot |
+| GET | `/api/storage/volumesnapshotclasses` | Query: `cluster` | Lists Volume Snapshot Classes |
+| GET | `/api/storage/volumesnapshotclasses/:name` | Path: `name`<br>Query: `cluster` | Returns Volume Snapshot Class details |
+| GET | `/api/storage/volumesnapshotclasses/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Volume Snapshot Class |
+| GET | `/api/storage/volumesnapshotcontents` | Query: `cluster` | Lists Volume Snapshot Contents |
+| GET | `/api/storage/volumesnapshotcontents/:name` | Path: `name`<br>Query: `cluster` | Returns Volume Snapshot Content details |
+| GET | `/api/storage/volumesnapshotcontents/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Volume Snapshot Content |
+
 ### Resource Details Query Options
 
 The detail endpoints support optional query parameters:

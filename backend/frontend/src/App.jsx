@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { api } from './api';
-import { formatMemoryQuantity } from './formatters';
+import { formatMemoryQuantity, formatStorageQuantity } from './formatters';
 
 const nav = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -17,6 +17,7 @@ const nav = [
   { key: 'deployments', label: 'Deployments', icon: Package },
   { key: 'services', label: 'Services', icon: Network },
   { key: 'ingresses', label: 'Ingress', icon: ExternalLink },
+  { key: 'storage', label: 'Storage', icon: HardDrive },
   { key: 'operators', label: 'Operators & CRDs', icon: Blocks },
   { key: 'events', label: 'Events', icon: Activity },
 ];
@@ -462,7 +463,65 @@ function NodeDetail({ node, onClose }) { return <DetailPanel key={`node-${node.n
 
 function NamespaceDetail({ namespace, onClose }) { return <DetailPanel key={`namespace-${namespace.name}`} title={namespace.name} resourceType="namespaces" name={namespace.name} onClose={onClose}><Badge>{namespace.status}</Badge><KeyValues values={{ Status: namespace.status, Created: formatDate(namespace.creationTimestamp), Labels: Object.keys(namespace.labels || {}).length }} /><div className="unsupported"><Layers3 size={17} /><span>Per-namespace pod, deployment, service, quota, CPU, and memory totals are not exposed by the backend.</span></div></DetailPanel>; }
 
-function PodDetail({ pod, onClose }) { const detail = useResource(() => api.pod(pod.namespace, pod.name), [pod.namespace, pod.name]); const [showLogs, setShowLogs] = useState(false); return <DetailPanel key={`pod-${pod.namespace}-${pod.name}`} title={pod.name} resourceType="pods" namespace={pod.namespace} name={pod.name} onClose={onClose}>{detail.loading ? <Loading rows={3} /> : detail.error ? <ErrorState error={detail.error} reload={detail.reload} /> : <><Badge>{detail.data?.status?.phase || pod.status}</Badge><KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Node: detail.data?.node, IP: detail.data?.ip, Restarts: detail.data?.restartCount, ServiceAccount: detail.data?.spec?.serviceAccountName, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} /><div className="detail-actions"><button className="button primary" onClick={() => setShowLogs(true)}><Terminal size={16} /> View logs</button></div><h3>Containers</h3><div className="mini-list">{detail.data?.containers?.map((container) => <div key={container.name}><strong>{container.name}</strong><span>{container.image}</span></div>)}</div><h3>Related events</h3><EventTable events={detail.data?.events || []} /></>}{showLogs && <Logs pod={pod} onClose={() => setShowLogs(false)} />}</DetailPanel>; }
+function PodDetail({ pod, onClose }) {
+  const detail = useResource(() => api.pod(pod.namespace, pod.name), [pod.namespace, pod.name]);
+  const [showLogs, setShowLogs] = useState(false);
+  return (
+    <DetailPanel key={`pod-${pod.namespace}-${pod.name}`} title={pod.name} resourceType="pods" namespace={pod.namespace} name={pod.name} onClose={onClose}>
+      {detail.loading ? (
+        <Loading rows={3} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <Badge>{detail.data?.status?.phase || pod.status}</Badge>
+          <KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Node: detail.data?.node, IP: detail.data?.ip, Restarts: detail.data?.restartCount, ServiceAccount: detail.data?.spec?.serviceAccountName, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} />
+          <div className="detail-actions">
+            <button className="button primary" onClick={() => setShowLogs(true)}><Terminal size={16} /> View logs</button>
+          </div>
+          <h3>Containers</h3>
+          <div className="mini-list">
+            {detail.data?.containers?.map((container) => (
+              <div key={container.name}><strong>{container.name}</strong><span>{container.image}</span></div>
+            ))}
+          </div>
+          {detail.data?.volumes && detail.data.volumes.length > 0 && (
+            <>
+              <h3>Mounted Volumes ({detail.data.volumes.length})</h3>
+              <div className="mini-list">
+                {detail.data.volumes.map((vol, idx) => (
+                  <div key={idx} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong className="resource-name"><HardDrive size={14} />{vol.name}</strong>
+                      <Badge tone="info">{vol.type}</Badge>
+                    </div>
+                    {vol.pvcName && (
+                      <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                        Bound PVC: <span className="mono" style={{ color: 'var(--teal)' }}>{vol.pvcName}</span>
+                      </div>
+                    )}
+                    {vol.mounts && vol.mounts.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+                        {vol.mounts.map((m, mIdx) => (
+                          <span key={mIdx} className="anno-tag">
+                            {m.container}: {m.mountPath} {m.readOnly ? '(ro)' : '(rw)'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          <h3>Related events</h3>
+          <EventTable events={detail.data?.events || []} />
+        </>
+      )}
+      {showLogs && <Logs pod={pod} onClose={() => setShowLogs(false)} />}
+    </DetailPanel>
+  );
+}
 
 function DeploymentDetail({ deployment, onClose }) { const detail = useResource(() => api.deployment(deployment.namespace, deployment.name), [deployment.namespace, deployment.name]); return <DetailPanel key={`deployment-${deployment.namespace}-${deployment.name}`} title={deployment.name} resourceType="deployments" namespace={deployment.namespace} name={deployment.name} onClose={onClose}>{detail.loading ? <Loading rows={3} /> : detail.error ? <ErrorState error={detail.error} reload={detail.reload} /> : <><Badge>{detail.data?.summary?.status || deployment.status}</Badge><KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Desired: detail.data?.summary?.desiredReplicas, Available: detail.data?.summary?.availableReplicas, Ready: detail.data?.summary?.readyReplicas, Updated: detail.data?.summary?.updatedReplicas, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} /><h3>Strategy</h3><pre className="json-block">{JSON.stringify(detail.data?.spec?.strategy || {}, null, 2)}</pre></>}</DetailPanel>; }
 
@@ -1410,6 +1469,7 @@ function App() {
   const isDeployments = page === 'deployments' || page === 'deployment';
   const isNodes = page === 'nodes' || page === 'node';
   const isNamespaces = page === 'namespaces' || page === 'namespace';
+  const isStorage = page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'csidriver' || page === 'volumesnapshots' || page === 'volumesnapshot';
   const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
 
   const title = isIngress
@@ -1456,6 +1516,7 @@ function App() {
     if (key === 'deployments' && page === 'deployment') return true;
     if (key === 'nodes' && page === 'node') return true;
     if (key === 'namespaces' && page === 'namespace') return true;
+    if (key === 'storage' && (page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'csidriver' || page === 'volumesnapshots' || page === 'volumesnapshot')) return true;
     if (key === 'operators' && (page === 'operator' || page === 'crds' || page === 'crd')) return true;
     return false;
   };
@@ -1528,6 +1589,40 @@ function App() {
       {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'httproute' && <HttpRouteDetail route={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'gateway' && <GatewayDetail gateway={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'pv' && (
+        <PVDetail
+          pv={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectPVC={(claim) => setSelected({ type: 'pvc', value: claim })}
+          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
+        />
+      )}
+      {selected?.type === 'pvc' && (
+        <PVCDetail
+          pvc={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectPV={(pvName) => setSelected({ type: 'pv', value: { name: pvName } })}
+          onSelectSC={(sc) => setSelected({ type: 'storageclass', value: { name: sc } })}
+        />
+      )}
+      {selected?.type === 'storageclass' && (
+        <StorageClassDetail
+          storageClass={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'csidriver' && (
+        <CSIDriverDetail
+          driver={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'volumesnapshot' && (
+        <VolumeSnapshotDetail
+          snapshot={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
       {selected?.type === 'crd' && (
         <CRDDetail
           crd={selected.value}
@@ -1543,6 +1638,832 @@ function App() {
         />
       )}
     </div>
+  );
+}
+
+
+// ---------------------------------------------------------------------------
+// Storage Explorer Components
+// ---------------------------------------------------------------------------
+
+function StorageRelationshipFlow({ storageClass, pvc, pv, csiDriver, onSelectPV, onSelectPVC, onSelectSC }) {
+  return (
+    <div className="storage-chain">
+      <div className="storage-chain-card">
+        <div className="storage-chain-card-header">
+          <Layers3 size={14} />
+          <span>Storage Class</span>
+        </div>
+        <strong>{storageClass || 'standard'}</strong>
+        <span>Provisioner / Reclaim policy</span>
+      </div>
+
+      <div className="storage-chain-card">
+        <div className="storage-chain-card-header">
+          <Database size={14} />
+          <span>PersistentVolumeClaim</span>
+        </div>
+        <strong>{pvc ? (typeof pvc === 'string' ? pvc : `${pvc.namespace}/${pvc.name}`) : '—'}</strong>
+        <span>User workload request</span>
+      </div>
+
+      <div className="storage-chain-card">
+        <div className="storage-chain-card-header">
+          <HardDrive size={14} />
+          <span>PersistentVolume</span>
+        </div>
+        <strong>{pv ? (typeof pv === 'string' ? pv : pv.name) : '—'}</strong>
+        <span>Cluster physical volume</span>
+      </div>
+
+      <div className="storage-chain-card">
+        <div className="storage-chain-card-header">
+          <Server size={14} />
+          <span>CSI Driver / Backend</span>
+        </div>
+        <strong>{csiDriver || 'standard'}</strong>
+        <span>Storage plugin implementation</span>
+      </div>
+    </div>
+  );
+}
+
+function StorageView({ onSelectPV, onSelectPVC, onSelectSC, onSelectCSI, onSelectSnapshot }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [namespace, setNamespace] = useState('');
+  const [search, setSearch] = useState('');
+
+  const overviewResource = useResource(api.storageOverview, []);
+  const pvsResource = useResource(() => api.persistentVolumes({ search }), [search]);
+  const pvcsResource = useResource(() => api.persistentVolumeClaims(namespace, { search }), [namespace, search]);
+  const scsResource = useResource(() => api.storageClasses({ search }), [search]);
+  const csiResource = useResource(api.csiDrivers, []);
+  const snapshotsResource = useResource(() => api.volumeSnapshots(namespace), [namespace]);
+
+  const overview = overviewResource.data || {};
+  const pvs = pvsResource.data?.data || [];
+  const pvcs = pvcsResource.data?.data || [];
+  const scs = scsResource.data?.data || [];
+  const csi = csiResource.data?.data || [];
+  const snapshotsData = snapshotsResource.data || {};
+  const snapshots = snapshotsData.items || [];
+
+  const reloadAll = () => {
+    overviewResource.reload();
+    pvsResource.reload();
+    pvcsResource.reload();
+    scsResource.reload();
+    csiResource.reload();
+    snapshotsResource.reload();
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Cluster Storage & Volumes"
+        title="Storage Explorer"
+        description="Explore Persistent Volumes, Claims, Storage Classes, CSI Drivers, and Volume Snapshots across the cluster."
+        action={
+          <button className="button subtle" onClick={reloadAll}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        }
+      />
+
+      <div className="metrics-grid">
+        <Metric
+          icon={HardDrive}
+          label="Persistent Volumes"
+          value={overview.persistentVolumes?.total ?? pvs.length}
+          detail={`${overview.persistentVolumes?.bound ?? 0} bound · ${overview.persistentVolumes?.available ?? 0} available`}
+          accent="teal"
+        />
+        <Metric
+          icon={Database}
+          label="Volume Claims"
+          value={overview.persistentVolumeClaims?.total ?? pvcs.length}
+          detail={`${overview.persistentVolumeClaims?.bound ?? 0} bound · ${overview.persistentVolumeClaims?.pending ?? 0} pending`}
+          accent="blue"
+        />
+        <Metric
+          icon={Layers3}
+          label="Storage Classes"
+          value={overview.storageClasses?.total ?? scs.length}
+          detail={overview.storageClasses?.defaultClass ? `Default: ${overview.storageClasses.defaultClass}` : 'No default class'}
+          accent="amber"
+        />
+        <Metric
+          icon={Server}
+          label="CSI Drivers"
+          value={overview.csiDrivers?.total ?? csi.length}
+          detail={snapshotsData.available ? 'Snapshots available' : 'No snapshot CRDs'}
+          accent="coral"
+        />
+      </div>
+
+      <div className="sub-nav-tabs">
+        <button
+          className={`sub-nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          <LayoutDashboard size={15} /> Overview
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'pvs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pvs')}
+        >
+          <HardDrive size={15} /> Persistent Volumes ({pvs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'pvcs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pvcs')}
+        >
+          <Database size={15} /> Claims ({pvcs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'storageclasses' ? 'active' : ''}`}
+          onClick={() => setActiveTab('storageclasses')}
+        >
+          <Layers3 size={15} /> Storage Classes ({scs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'csidrivers' ? 'active' : ''}`}
+          onClick={() => setActiveTab('csidrivers')}
+        >
+          <Server size={15} /> CSI Drivers ({csi.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'snapshots' ? 'active' : ''}`}
+          onClick={() => setActiveTab('snapshots')}
+        >
+          <FileText size={15} /> Snapshots ({snapshots.length})
+        </button>
+      </div>
+
+      {activeTab !== 'overview' && (
+        <Toolbar search={search} setSearch={setSearch} onRefresh={reloadAll}>
+          {(activeTab === 'pvcs' || activeTab === 'snapshots') && (
+            <input
+              className="select"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              placeholder="All namespaces"
+            />
+          )}
+        </Toolbar>
+      )}
+
+      {activeTab === 'overview' ? (
+        overviewResource.loading ? (
+          <Loading rows={4} />
+        ) : overviewResource.error ? (
+          <ErrorState error={overviewResource.error} reload={overviewResource.reload} />
+        ) : (
+          <>
+            <div className="storage-overview-grid">
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><HardDrive size={16} /> PV Phase Breakdown</h3>
+                  <Badge tone="teal">{overview.persistentVolumes?.total ?? 0} Total</Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Bound (in use)</span>
+                    <Badge tone="success">{overview.persistentVolumes?.bound ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Available (free)</span>
+                    <Badge tone="info">{overview.persistentVolumes?.available ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Released (pending reclaim)</span>
+                    <Badge tone="warning">{overview.persistentVolumes?.released ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Failed</span>
+                    <Badge tone="danger">{overview.persistentVolumes?.failed ?? 0}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><Database size={16} /> PVC Phase Breakdown</h3>
+                  <Badge tone="blue">{overview.persistentVolumeClaims?.total ?? 0} Total</Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Bound (attached)</span>
+                    <Badge tone="success">{overview.persistentVolumeClaims?.bound ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Pending (unbound)</span>
+                    <Badge tone="warning">{overview.persistentVolumeClaims?.pending ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Lost</span>
+                    <Badge tone="danger">{overview.persistentVolumeClaims?.lost ?? 0}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><Layers3 size={16} /> Storage Classes & Drivers</h3>
+                  <Badge tone="amber">{overview.storageClasses?.total ?? 0} Classes</Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Default StorageClass</span>
+                    <strong>{overview.storageClasses?.defaultClass || 'None'}</strong>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>CSI Drivers Installed</span>
+                    <Badge tone="info">{overview.csiDrivers?.total ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Snapshot Support</span>
+                    <Badge tone={snapshotsData.available ? 'success' : 'warning'}>
+                      {snapshotsData.available ? 'Available' : 'CRDs Not Installed'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Architecture</span>
+                  <h2>Storage Relationship Model</h2>
+                </div>
+                <Badge tone="info">Kubernetes CSI</Badge>
+              </div>
+              <StorageRelationshipFlow
+                storageClass={overview.storageClasses?.defaultClass || 'local-path'}
+                pvc="workload-pvc"
+                pv="pvc-volume-id"
+                csiDriver={overview.csiDrivers?.drivers?.[0] || 'csi-driver'}
+              />
+            </section>
+          </>
+        )
+      ) : activeTab === 'pvs' ? (
+        pvsResource.loading ? (
+          <Loading rows={5} />
+        ) : pvsResource.error ? (
+          <ErrorState error={pvsResource.error} reload={pvsResource.reload} />
+        ) : (
+          <Table
+            rows={pvs}
+            onRow={onSelectPV}
+            emptyTitle="No Persistent Volumes found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Volume Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <HardDrive size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              {
+                key: 'capacity',
+                label: 'Capacity',
+                render: (r) => <span className="mono">{formatStorageQuantity(r.capacity)}</span>,
+              },
+              {
+                key: 'accessModes',
+                label: 'Access Modes',
+                render: (r) => r.accessModes?.join(', ') || '—',
+              },
+              {
+                key: 'reclaimPolicy',
+                label: 'Reclaim Policy',
+                render: (r) => <Badge tone="info">{r.reclaimPolicy}</Badge>,
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (r) => (
+                  <Badge tone={r.status === 'Bound' ? 'success' : r.status === 'Available' ? 'info' : 'warning'}>
+                    {r.status}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'storageClass',
+                label: 'StorageClass',
+                render: (r) => <span className="mono">{r.storageClass}</span>,
+              },
+              {
+                key: 'claim',
+                label: 'Bound Claim',
+                render: (r) => (r.claim ? <span className="mono">{r.claim}</span> : '—'),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'pvcs' ? (
+        pvcsResource.loading ? (
+          <Loading rows={5} />
+        ) : pvcsResource.error ? (
+          <ErrorState error={pvcsResource.error} reload={pvcsResource.reload} />
+        ) : (
+          <Table
+            rows={pvcs}
+            onRow={onSelectPVC}
+            emptyTitle="No Persistent Volume Claims found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Claim Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Database size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              { key: 'namespace', label: 'Namespace' },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (r) => (
+                  <Badge tone={r.status === 'Bound' ? 'success' : 'warning'}>
+                    {r.status}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'volumeName',
+                label: 'Bound Volume',
+                render: (r) => (r.volumeName ? <span className="mono">{r.volumeName}</span> : '—'),
+              },
+              {
+                key: 'capacity',
+                label: 'Capacity',
+                render: (r) => <span className="mono">{formatStorageQuantity(r.capacity)}</span>,
+              },
+              {
+                key: 'storageClass',
+                label: 'StorageClass',
+                render: (r) => <span className="mono">{r.storageClass}</span>,
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'storageclasses' ? (
+        scsResource.loading ? (
+          <Loading rows={5} />
+        ) : scsResource.error ? (
+          <ErrorState error={scsResource.error} reload={scsResource.reload} />
+        ) : (
+          <Table
+            rows={scs}
+            onRow={onSelectSC}
+            emptyTitle="No Storage Classes found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Class Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Layers3 size={16} />
+                    {r.name}
+                    {r.isDefault && <Badge tone="success">Default</Badge>}
+                  </strong>
+                ),
+              },
+              { key: 'provisioner', label: 'Provisioner' },
+              { key: 'reclaimPolicy', label: 'Reclaim Policy' },
+              { key: 'volumeBindingMode', label: 'Binding Mode' },
+              {
+                key: 'allowVolumeExpansion',
+                label: 'Allow Expansion',
+                render: (r) => (r.allowVolumeExpansion ? 'Yes' : 'No'),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'csidrivers' ? (
+        csiResource.loading ? (
+          <Loading rows={5} />
+        ) : csiResource.error ? (
+          <ErrorState error={csiResource.error} reload={csiResource.reload} />
+        ) : (
+          <Table
+            rows={csi}
+            onRow={onSelectCSI}
+            emptyTitle="No CSI Drivers found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Driver Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Server size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              {
+                key: 'attachRequired',
+                label: 'Attach Required',
+                render: (r) => (r.attachRequired ? 'Yes' : 'No'),
+              },
+              {
+                key: 'podInfoOnMount',
+                label: 'Pod Info On Mount',
+                render: (r) => (r.podInfoOnMount ? 'Yes' : 'No'),
+              },
+              {
+                key: 'volumeLifecycleModes',
+                label: 'Lifecycle Modes',
+                render: (r) => r.volumeLifecycleModes?.join(', ') || 'Persistent',
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : snapshotsResource.loading ? (
+        <Loading rows={5} />
+      ) : snapshotsResource.error ? (
+        <ErrorState error={snapshotsResource.error} reload={snapshotsResource.reload} />
+      ) : !snapshotsData.available ? (
+        <div className="unsupported">
+          <AlertTriangle size={18} />
+          <div>
+            <strong>VolumeSnapshot CRDs Not Installed</strong>
+            <span>
+              The Kubernetes VolumeSnapshot CRDs (snapshot.storage.k8s.io) are not installed on this cluster.
+              To enable snapshot management, install the standard Kubernetes external-snapshotter CRDs.
+            </span>
+          </div>
+        </div>
+      ) : (
+        <Table
+          rows={snapshots}
+          onRow={onSelectSnapshot}
+          emptyTitle="No Volume Snapshots found"
+          columns={[
+            {
+              key: 'name',
+              label: 'Snapshot Name',
+              render: (r) => (
+                <strong className="resource-name">
+                  <FileText size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            {
+              key: 'readyToUse',
+              label: 'Ready',
+              render: (r) => (
+                <Badge tone={r.readyToUse ? 'success' : 'warning'}>
+                  {r.readyToUse ? 'Ready' : 'Pending'}
+                </Badge>
+              ),
+            },
+            {
+              key: 'restoreSize',
+              label: 'Restore Size',
+              render: (r) => <span className="mono">{formatStorageQuantity(r.restoreSize)}</span>,
+            },
+            { key: 'sourcePVC', label: 'Source PVC' },
+            { key: 'snapshotClassName', label: 'Snapshot Class' },
+            {
+              key: 'age',
+              label: 'Age',
+              render: (r) => r.age || age(r.creationTimestamp),
+            },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
+function PVDetail({ pv, onClose, onSelectPVC, onSelectSC }) {
+  const detail = useResource(() => api.persistentVolume(pv.name), [pv.name]);
+  const data = detail.data || pv;
+
+  return (
+    <DetailPanel
+      key={`pv-${pv.name}`}
+      title={pv.name}
+      resourceType="persistentvolumes"
+      name={pv.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone={data.status === 'Bound' ? 'success' : data.status === 'Available' ? 'info' : 'warning'}>
+              {data.status}
+            </Badge>
+            <Badge tone="info">{data.volumeMode || 'Filesystem'}</Badge>
+            <Badge tone="info">{data.reclaimPolicy || 'Retain'}</Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              'Volume Name': data.name,
+              Capacity: formatStorageQuantity(data.capacity),
+              'Access Modes': data.accessModes?.join(', ') || '—',
+              'Storage Class': data.storageClass || '—',
+              'Bound Claim': data.claim || '—',
+              'CSI Driver': data.csiDriver || 'standard',
+              'Reclaim Policy': data.reclaimPolicy || 'Retain',
+              'Created': formatDate(data.creationTimestamp),
+              'Age': data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Storage Relationship</h3>
+          <StorageRelationshipFlow
+            storageClass={data.storageClass}
+            pvc={data.claimRef ? `${data.claimRef.namespace}/${data.claimRef.name}` : data.claim}
+            pv={data.name}
+            csiDriver={data.csiDriver}
+          />
+
+          {data.mountOptions && data.mountOptions.length > 0 && (
+            <>
+              <h3>Mount Options</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {data.mountOptions.map((opt, i) => (
+                  <span key={i} className="anno-tag">{opt}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {data.labels && Object.keys(data.labels).length > 0 && (
+            <>
+              <h3>Labels</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {Object.entries(data.labels).map(([k, v]) => (
+                  <span key={k} className="anno-tag">{k}: {v}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {data.events && data.events.length > 0 && (
+            <>
+              <h3>Related Events</h3>
+              <EventTable events={data.events} />
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function PVCDetail({ pvc, onClose, onSelectPV, onSelectSC }) {
+  const detail = useResource(() => api.persistentVolumeClaim(pvc.namespace, pvc.name), [pvc.namespace, pvc.name]);
+  const data = detail.data || pvc;
+
+  return (
+    <DetailPanel
+      key={`pvc-${pvc.namespace}-${pvc.name}`}
+      title={pvc.name}
+      resourceType="persistentvolumeclaims"
+      namespace={pvc.namespace}
+      name={pvc.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone={data.status === 'Bound' ? 'success' : 'warning'}>
+              {data.status}
+            </Badge>
+            <Badge tone="info">{data.volumeMode || 'Filesystem'}</Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              Namespace: data.namespace,
+              'Claim Name': data.name,
+              Capacity: formatStorageQuantity(data.capacity),
+              'Requested Storage': formatStorageQuantity(data.requestedStorage),
+              'Access Modes': data.accessModes?.join(', ') || '—',
+              'Storage Class': data.storageClass || '—',
+              'Bound Volume': data.volumeName || '—',
+              'Created': formatDate(data.creationTimestamp),
+              'Age': data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Storage Relationship</h3>
+          <StorageRelationshipFlow
+            storageClass={data.storageClass}
+            pvc={`${data.namespace}/${data.name}`}
+            pv={data.volumeName}
+            csiDriver={data.related?.volume?.csiDriver || 'standard'}
+          />
+
+          {data.labels && Object.keys(data.labels).length > 0 && (
+            <>
+              <h3>Labels</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {Object.entries(data.labels).map(([k, v]) => (
+                  <span key={k} className="anno-tag">{k}: {v}</span>
+                ))}
+              </div>
+            </>
+          )}
+
+          {data.events && data.events.length > 0 && (
+            <>
+              <h3>Related Events</h3>
+              <EventTable events={data.events} />
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function StorageClassDetail({ storageClass, onClose }) {
+  const detail = useResource(() => api.storageClass(storageClass.name), [storageClass.name]);
+  const data = detail.data || storageClass;
+
+  return (
+    <DetailPanel
+      key={`sc-${storageClass.name}`}
+      title={storageClass.name}
+      resourceType="storageclasses"
+      name={storageClass.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="info">{data.provisioner}</Badge>
+            {data.isDefault && <Badge tone="success">Default Class</Badge>}
+            <Badge tone="info">{data.reclaimPolicy || 'Delete'}</Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              'Class Name': data.name,
+              Provisioner: data.provisioner,
+              'Reclaim Policy': data.reclaimPolicy || 'Delete',
+              'Binding Mode': data.volumeBindingMode || 'Immediate',
+              'Allow Volume Expansion': data.allowVolumeExpansion ? 'Yes' : 'No',
+              'Default Class': data.isDefault ? 'Yes' : 'No',
+              'Created': formatDate(data.creationTimestamp),
+              'Age': data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          {data.parameters && Object.keys(data.parameters).length > 0 && (
+            <>
+              <h3>Parameters</h3>
+              <pre className="json-block">{JSON.stringify(data.parameters, null, 2)}</pre>
+            </>
+          )}
+
+          {data.mountOptions && data.mountOptions.length > 0 && (
+            <>
+              <h3>Mount Options</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {data.mountOptions.map((opt, i) => (
+                  <span key={i} className="anno-tag">{opt}</span>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function CSIDriverDetail({ driver, onClose }) {
+  const detail = useResource(() => api.csiDriver(driver.name), [driver.name]);
+  const data = detail.data || driver;
+
+  return (
+    <DetailPanel
+      key={`csi-${driver.name}`}
+      title={driver.name}
+      resourceType="csidrivers"
+      name={driver.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="success">CSI Driver</Badge>
+            <Badge tone={data.attachRequired ? 'info' : 'warning'}>
+              {data.attachRequired ? 'Attach Required' : 'No Attach'}
+            </Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              'Driver Name': data.name,
+              'Attach Required': data.attachRequired ? 'Yes' : 'No',
+              'Pod Info On Mount': data.podInfoOnMount ? 'Yes' : 'No',
+              'Storage Capacity': data.storageCapacity ? 'Yes' : 'No',
+              'Lifecycle Modes': data.volumeLifecycleModes?.join(', ') || 'Persistent',
+              'Requires Reparse': data.requiresReparse ? 'Yes' : 'No',
+              'Created': formatDate(data.creationTimestamp),
+              'Age': data.age || age(data.creationTimestamp),
+            }}
+          />
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function VolumeSnapshotDetail({ snapshot, onClose }) {
+  const detail = useResource(() => api.volumeSnapshot(snapshot.namespace, snapshot.name), [snapshot.namespace, snapshot.name]);
+  const data = detail.data || snapshot;
+
+  return (
+    <DetailPanel
+      key={`snap-${snapshot.namespace}-${snapshot.name}`}
+      title={snapshot.name}
+      resourceType="volumesnapshots"
+      namespace={snapshot.namespace}
+      name={snapshot.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone={data.readyToUse ? 'success' : 'warning'}>
+              {data.readyToUse ? 'Ready' : 'Pending'}
+            </Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              Namespace: data.namespace,
+              'Snapshot Name': data.name,
+              'Ready To Use': data.readyToUse ? 'Yes' : 'No',
+              'Restore Size': formatStorageQuantity(data.restoreSize),
+              'Source PVC': data.sourcePVC || '—',
+              'Snapshot Class': data.snapshotClassName || '—',
+              'Bound Content': data.snapshotContentName || '—',
+              'Created': formatDate(data.creationTimestamp),
+              'Age': data.age || age(data.creationTimestamp),
+            }}
+          />
+        </>
+      )}
+    </DetailPanel>
   );
 }
 
