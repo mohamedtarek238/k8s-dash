@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   getPodRestartCount,
   getResponseBody,
@@ -70,8 +69,8 @@ function mapPodDetails(pod, events = []) {
   };
 }
 
-async function listPods(namespace) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function listPods(namespace, clients) {
+  const { coreV1Api } = clients;
 
   const response = namespace
     ? await coreV1Api.listNamespacedPod({ namespace })
@@ -80,8 +79,8 @@ async function listPods(namespace) {
   return (getResponseBody(response).items || []).map(mapPodSummary);
 }
 
-async function getPodDetails(namespace, podName) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function getPodDetails(namespace, podName, clients) {
+  const { coreV1Api } = clients;
 
   const [podResponse, eventsResponse] = await Promise.all([
     coreV1Api.readNamespacedPod({ name: podName, namespace }),
@@ -99,8 +98,8 @@ async function getPodDetails(namespace, podName) {
   return mapPodDetails(pod, sortEventsByRecency(podEvents));
 }
 
-async function getPodLogs(namespace, podName, options = {}) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function getPodLogs(namespace, podName, options = {}, clients) {
+  const { coreV1Api } = clients;
 
   const response = await coreV1Api.readNamespacedPodLog({
     name: podName,

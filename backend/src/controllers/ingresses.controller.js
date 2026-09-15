@@ -4,20 +4,20 @@ const { sendSuccess, sendList } = require('../utils/response');
 
 async function getIngresses(req, res) {
   const { namespace, includeKong } = req.validatedQuery || {};
-  const data = await ingressesService.listIngresses(namespace, { includeKong });
+  const data = await ingressesService.listIngresses(namespace, { includeKong }, req.k8sClients);
   return sendList(res, data, namespace ? { namespace } : {});
 }
 
 async function getIngressDetails(req, res) {
   const { namespace, name } = req.validatedParams;
   const { includeRelated, includeEvents, includeKong } = req.validatedQuery || {};
-  const data = await ingressesService.getIngressDetails(namespace, name, { includeRelated, includeEvents, includeKong });
+  const data = await ingressesService.getIngressDetails(namespace, name, { includeRelated, includeEvents, includeKong }, req.k8sClients);
   return sendSuccess(res, data);
 }
 
 async function getIngressYaml(req, res) {
   const { namespace, name } = req.validatedParams;
-  const data = await yamlService.getResourceYaml('ingresses', { namespace, name });
+  const data = await yamlService.getResourceYaml('ingresses', { namespace, name }, req.k8sClients);
   return sendSuccess(res, data);
 }
 

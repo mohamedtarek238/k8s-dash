@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody, calculateAge } = require('../../utils/k8sHelpers');
 const { getResourceEvents } = require('./events.service');
 const {
@@ -227,9 +226,9 @@ function mapIngressDetails(ingress, { relatedServices, events, resolvedPlugins =
   return data;
 }
 
-async function listIngresses(namespace, { includeKong = false } = {}) {
-  const { networkingV1Api } = initializeKubernetesClients();
-  const ingressClassMap = await getIngressClassControllerMap();
+async function listIngresses(namespace, { includeKong = false } = {}, clients) {
+  const { networkingV1Api } = clients;
+  const ingressClassMap = await getIngressClassControllerMap(clients);
 
   const response = namespace
     ? await networkingV1Api.listNamespacedIngress({ namespace })
@@ -239,9 +238,9 @@ async function listIngresses(namespace, { includeKong = false } = {}) {
   return items.map((ing) => mapIngress(ing, ingressClassMap));
 }
 
-async function getIngressDetails(namespace, name, { includeRelated = false, includeEvents = false, includeKong = true } = {}) {
-  const { networkingV1Api, coreV1Api } = initializeKubernetesClients();
-  const ingressClassMap = await getIngressClassControllerMap();
+async function getIngressDetails(namespace, name, { includeRelated = false, includeEvents = false, includeKong = true } = {}, clients) {
+  const { networkingV1Api, coreV1Api } = clients;
+  const ingressClassMap = await getIngressClassControllerMap(clients);
 
   const response = await networkingV1Api.readNamespacedIngress({ name, namespace });
   const ingress = getResponseBody(response);
@@ -251,7 +250,7 @@ async function getIngressDetails(namespace, name, { includeRelated = false, incl
 
   let resolvedPlugins = [];
   if (includeKong && kongAnnotations.plugins.length > 0) {
-    resolvedPlugins = await resolveKongPlugins(namespace, kongAnnotations.plugins);
+    resolvedPlugins = await resolveKongPlugins(namespace, kongAnnotations.plugins, clients);
   }
 
   const ingressClassName =
@@ -291,7 +290,7 @@ async function getIngressDetails(namespace, name, { includeRelated = false, incl
     controller,
     plugins: resolvedPlugins,
     resolvePods: true,
-  });
+  }, clients);
 
   let relatedServices;
   if (includeRelated) {
@@ -326,7 +325,7 @@ async function getIngressDetails(namespace, name, { includeRelated = false, incl
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'Ingress', namespace, name, uid: ingress.metadata?.uid });
+    events = await getResourceEvents({ kind: 'Ingress', namespace, name, uid: ingress.metadata?.uid }, clients);
   }
 
   return mapIngressDetails(ingress, {

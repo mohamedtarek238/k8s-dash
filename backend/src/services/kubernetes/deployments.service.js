@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody } = require('../../utils/k8sHelpers');
 
 function getDeploymentStatus(deployment) {
@@ -49,8 +48,8 @@ function mapDeploymentDetails(deployment) {
   };
 }
 
-async function listDeployments(namespace) {
-  const { appsV1Api } = initializeKubernetesClients();
+async function listDeployments(namespace, clients) {
+  const { appsV1Api } = clients;
 
   const response = namespace
     ? await appsV1Api.listNamespacedDeployment({ namespace })
@@ -59,8 +58,8 @@ async function listDeployments(namespace) {
   return (getResponseBody(response).items || []).map(mapDeploymentSummary);
 }
 
-async function getDeploymentDetails(namespace, name) {
-  const { appsV1Api } = initializeKubernetesClients();
+async function getDeploymentDetails(namespace, name, clients) {
+  const { appsV1Api } = clients;
   const response = await appsV1Api.readNamespacedDeployment({ name, namespace });
   return mapDeploymentDetails(getResponseBody(response));
 }

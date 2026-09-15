@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   parseResourceQuantity,
   getNodeRoles,
@@ -113,14 +112,14 @@ function mapNodeDetails(node, { relatedPods, events } = {}) {
   return data;
 }
 
-async function listNodes() {
-  const { coreV1Api } = initializeKubernetesClients();
+async function listNodes(clients) {
+  const { coreV1Api } = clients;
   const response = await coreV1Api.listNode();
   return (getResponseBody(response).items || []).map(mapNode);
 }
 
-async function getNodeDetails(name, { includeRelated = false, includeEvents = false } = {}) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function getNodeDetails(name, { includeRelated = false, includeEvents = false } = {}, clients) {
+  const { coreV1Api } = clients;
   const response = await coreV1Api.readNode({ name });
   const node = getResponseBody(response);
 
@@ -145,7 +144,7 @@ async function getNodeDetails(name, { includeRelated = false, includeEvents = fa
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'Node', name, uid: node.metadata?.uid });
+    events = await getResourceEvents({ kind: 'Node', name, uid: node.metadata?.uid }, clients);
   }
 
   return mapNodeDetails(node, { relatedPods, events });

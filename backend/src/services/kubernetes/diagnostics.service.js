@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   getResponseBody,
   getNodeCondition,
@@ -32,8 +31,8 @@ function getContainerLastTerminatedReason(containerStatus) {
   return containerStatus?.lastState?.terminated?.reason || null;
 }
 
-async function collectClusterIssues() {
-  const { coreV1Api, appsV1Api } = initializeKubernetesClients();
+async function collectClusterIssues(clients) {
+  const { coreV1Api, appsV1Api } = clients;
 
   const [nodesResponse, podsResponse, deploymentsResponse] = await Promise.all([
     coreV1Api.listNode(),
@@ -252,8 +251,8 @@ function determineHealthStatus(score, issues) {
   return 'healthy';
 }
 
-async function getClusterHealth() {
-  const issues = await collectClusterIssues();
+async function getClusterHealth(clients) {
+  const issues = await collectClusterIssues(clients);
   const score = calculateHealthScore(issues);
   const status = determineHealthStatus(score, issues);
 
@@ -264,8 +263,8 @@ async function getClusterHealth() {
   };
 }
 
-async function getTroubleshootingReport() {
-  const issues = await collectClusterIssues();
+async function getTroubleshootingReport(clients) {
+  const issues = await collectClusterIssues(clients);
 
   return {
     critical: issues.filter((i) => i.severity === 'critical'),

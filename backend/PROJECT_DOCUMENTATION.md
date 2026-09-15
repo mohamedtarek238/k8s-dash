@@ -185,10 +185,14 @@ Example response:
 
 | Method | Path | Description |
 |---|---|---|
+| GET | `/api/clusters` | Lists all registered Kubernetes clusters with safe metadata (id, name, context, server, isDefault) |
+| GET | `/api/clusters/:clusterId` | Returns details for a specific registered cluster by ID |
 | GET | `/api/status` | Reports backend status and whether a Kubernetes API call succeeds |
 | GET | `/api/cluster` | Returns cluster version, context, server, resource counts, and node health |
 | GET | `/api/health` | Returns a cluster health score, status, and detected issues |
 | GET | `/api/troubleshooting` | Returns diagnostic issues grouped by severity |
+
+Every resource and diagnostic endpoint accepts an optional `?cluster=<clusterId>` query parameter to target a specific cluster. When omitted, the default cluster is targeted.
 
 `/api/status` intentionally returns an HTTP 200 response with `kubernetes: "disconnected"` when its connectivity check fails. This allows a frontend to distinguish a running backend from a connected cluster.
 

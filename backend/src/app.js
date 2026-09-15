@@ -7,10 +7,14 @@ const morgan = require('morgan');
 
 const apiRoutes = require('./routes');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
-const { initializeKubernetesClients, getCurrentContext } = require('./config/kubernetes');
+const { clusterMiddleware } = require('./middleware/clusterMiddleware');
+const { initializeClusterRegistry, getCurrentContext, listClusters } = require('./config/kubernetes');
 
 function createApp() {
-  initializeKubernetesClients();
+  initializeClusterRegistry();
+
+  const clusters = listClusters();
+  console.log(`[App] Loaded ${clusters.length} cluster(s): ${clusters.map((c) => c.id).join(', ')}`);
 
   const app = express();
 
@@ -31,11 +35,13 @@ function createApp() {
         name: 'Kubernetes Dashboard Backend',
         version: '1.0.0',
         context: getCurrentContext(),
+        clusters: listClusters().length,
       },
     });
   });
 
-  app.use('/api', apiRoutes);
+  // Mount cluster middleware on all /api routes — resolves req.k8sClients
+  app.use('/api', clusterMiddleware, apiRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

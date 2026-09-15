@@ -1,13 +1,7 @@
-const {
-  initializeKubernetesClients,
-  getCurrentContext,
-  getCurrentCluster,
-  getClusterServer,
-} = require('../../config/kubernetes');
 const { getResponseBody, isNodeReady } = require('../../utils/k8sHelpers');
 
-async function getClusterOverview() {
-  const { coreV1Api, appsV1Api, versionApi } = initializeKubernetesClients();
+async function getClusterOverview(clients, meta) {
+  const { coreV1Api, appsV1Api, versionApi } = clients;
 
   const [versionInfo, nodes, namespaces, pods, deployments, services] = await Promise.all([
     versionApi.getCode(),
@@ -28,9 +22,9 @@ async function getClusterOverview() {
   }
 
   return {
-    context: getCurrentContext(),
-    cluster: getCurrentCluster(),
-    server: getClusterServer(),
+    context: meta.context,
+    cluster: meta.cluster,
+    server: meta.server,
     version: getResponseBody(versionInfo),
     nodes: {
       total: nodeItems.length,
@@ -51,8 +45,8 @@ async function getClusterOverview() {
   };
 }
 
-async function checkConnection() {
-  const { versionApi } = initializeKubernetesClients();
+async function checkConnection(clients) {
+  const { versionApi } = clients;
   await versionApi.getCode();
   return true;
 }

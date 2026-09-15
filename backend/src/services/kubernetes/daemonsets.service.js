@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   getResponseBody,
   calculateAge,
@@ -93,8 +92,8 @@ function mapDaemonSetDetails(daemonSet, { relatedPods, events } = {}) {
   return data;
 }
 
-async function listDaemonSets(namespace) {
-  const { appsV1Api } = initializeKubernetesClients();
+async function listDaemonSets(namespace, clients) {
+  const { appsV1Api } = clients;
 
   const response = namespace
     ? await appsV1Api.listNamespacedDaemonSet({ namespace })
@@ -103,8 +102,8 @@ async function listDaemonSets(namespace) {
   return (getResponseBody(response).items || []).map(mapDaemonSet);
 }
 
-async function getDaemonSetDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}) {
-  const { appsV1Api, coreV1Api } = initializeKubernetesClients();
+async function getDaemonSetDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}, clients) {
+  const { appsV1Api, coreV1Api } = clients;
 
   const response = await appsV1Api.readNamespacedDaemonSet({ name, namespace });
   const daemonSet = getResponseBody(response);
@@ -135,7 +134,7 @@ async function getDaemonSetDetails(namespace, name, { includeRelated = false, in
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'DaemonSet', namespace, name, uid: daemonSet.metadata?.uid });
+    events = await getResourceEvents({ kind: 'DaemonSet', namespace, name, uid: daemonSet.metadata?.uid }, clients);
   }
 
   return mapDaemonSetDetails(daemonSet, { relatedPods, events });

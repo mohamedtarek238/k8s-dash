@@ -4,19 +4,19 @@ const { sendSuccess, sendList } = require('../utils/response');
 
 async function getDeployments(req, res) {
   const { namespace } = req.validatedQuery || {};
-  const data = await deploymentsService.listDeployments(namespace);
+  const data = await deploymentsService.listDeployments(namespace, req.k8sClients);
   return sendList(res, data, namespace ? { namespace } : {});
 }
 
 async function getDeploymentDetails(req, res) {
   const { namespace, name } = req.validatedParams;
-  const data = await deploymentsService.getDeploymentDetails(namespace, name);
+  const data = await deploymentsService.getDeploymentDetails(namespace, name, req.k8sClients);
   return sendSuccess(res, data);
 }
 
 async function getDeploymentYaml(req, res) {
   const { namespace, name } = req.validatedParams;
-  const data = await yamlService.getResourceYaml('deployments', { namespace, name });
+  const data = await yamlService.getResourceYaml('deployments', { namespace, name }, req.k8sClients);
   return sendSuccess(res, data);
 }
 

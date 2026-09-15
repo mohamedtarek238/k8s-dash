@@ -1,8 +1,6 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody } = require('../../utils/k8sHelpers');
 
-let crdCache = null;
-let crdCacheTime = 0;
+const crdCacheMap = new Map();
 const CRD_CACHE_TTL_MS = 60000;
 
 function sanitizeKongConfig(config) {
@@ -70,9 +68,9 @@ function extractKongAnnotations(annotations = {}) {
   };
 }
 
-async function getIngressClassControllerMap() {
+async function getIngressClassControllerMap(clients) {
   try {
-    const { networkingV1Api } = initializeKubernetesClients();
+    const { networkingV1Api } = clients;
     const res = await networkingV1Api.listIngressClass();
     const items = getResponseBody(res).items || [];
     const map = {};
@@ -121,13 +119,14 @@ function detectController({ ingressClassName, annotations = {}, parentRefs = [] 
   };
 }
 
-async function detectKongCRDs(forceRefresh = false) {
+async function detectKongCRDs(clients, clusterId = 'default', forceRefresh = false) {
   const now = Date.now();
-  if (!forceRefresh && crdCache && now - crdCacheTime < CRD_CACHE_TTL_MS) {
-    return crdCache;
+  const cached = crdCacheMap.get(clusterId);
+  if (!forceRefresh && cached && now - cached.time < CRD_CACHE_TTL_MS) {
+    return cached.data;
   }
 
-  const { customObjectsApi } = initializeKubernetesClients();
+  const { customObjectsApi } = clients;
   const checks = [
     { key: 'kongPlugins', group: 'configuration.konghq.com', version: 'v1', plural: 'kongplugins' },
     { key: 'kongClusterPlugins', group: 'configuration.konghq.com', version: 'v1', plural: 'kongclusterplugins' },
@@ -155,17 +154,16 @@ async function detectKongCRDs(forceRefresh = false) {
     })
   );
 
-  crdCache = results;
-  crdCacheTime = now;
+  crdCacheMap.set(clusterId, { data: results, time: now });
   return results;
 }
 
-async function resolveKongPlugins(namespace, pluginNames = []) {
+async function resolveKongPlugins(namespace, pluginNames = [], clients) {
   if (!pluginNames || pluginNames.length === 0) {
     return [];
   }
 
-  const { customObjectsApi } = initializeKubernetesClients();
+  const { customObjectsApi } = clients;
   const resolved = await Promise.all(
     pluginNames.map(async (name) => {
       try {
@@ -228,10 +226,10 @@ async function resolveKongPlugins(namespace, pluginNames = []) {
   return resolved;
 }
 
-async function resolveServiceBackendPods(namespace, serviceName) {
+async function resolveServiceBackendPods(namespace, serviceName, clients) {
   if (!serviceName || !namespace) return [];
   try {
-    const { coreV1Api } = initializeKubernetesClients();
+    const { coreV1Api } = clients;
     const epRes = await coreV1Api.readNamespacedEndpoints({ name: serviceName, namespace });
     const ep = getResponseBody(epRes);
     const subsets = ep.subsets || [];
@@ -272,14 +270,14 @@ async function buildRoutingGraph({
   plugins = [],
   parentRefs = [],
   resolvePods = false,
-}) {
+}, clients) {
   const backends = await Promise.all(
     backendServices.map(async (backend) => {
       const svcNamespace = backend.namespace || namespace;
       const svcName = backend.serviceName || backend.name;
       let targetPods = [];
-      if (resolvePods && svcName) {
-        targetPods = await resolveServiceBackendPods(svcNamespace, svcName);
+      if (resolvePods && svcName && clients) {
+        targetPods = await resolveServiceBackendPods(svcNamespace, svcName, clients);
       }
       return {
         serviceName: svcName,

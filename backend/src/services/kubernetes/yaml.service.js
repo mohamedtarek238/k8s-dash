@@ -1,5 +1,4 @@
 const yaml = require('js-yaml');
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody } = require('../../utils/k8sHelpers');
 
 const SUPPORTED_RESOURCES = {
@@ -288,7 +287,7 @@ function normalizeKubernetesObject(raw, defaultApiVersion, defaultKind) {
  * @param {string} resourceType - Resource type (pods, deployments, nodes, etc.)
  * @param {object} params - { namespace, name }
  */
-async function getResourceYaml(resourceType, { namespace, name }) {
+async function getResourceYaml(resourceType, { namespace, name } = {}, clients) {
   const normalizedType = String(resourceType || '').toLowerCase().trim();
   const config = SUPPORTED_RESOURCES[normalizedType];
 
@@ -310,7 +309,6 @@ async function getResourceYaml(resourceType, { namespace, name }) {
     throw error;
   }
 
-  const clients = initializeKubernetesClients();
   const response = await config.fetch(clients, { namespace, name });
   const rawObj = getResponseBody(response);
 

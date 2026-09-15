@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   getResponseBody,
   calculateAge,
@@ -104,8 +103,8 @@ function mapStatefulSetDetails(statefulSet, { relatedPods, events } = {}) {
   return data;
 }
 
-async function listStatefulSets(namespace) {
-  const { appsV1Api } = initializeKubernetesClients();
+async function listStatefulSets(namespace, clients) {
+  const { appsV1Api } = clients;
 
   const response = namespace
     ? await appsV1Api.listNamespacedStatefulSet({ namespace })
@@ -114,8 +113,8 @@ async function listStatefulSets(namespace) {
   return (getResponseBody(response).items || []).map(mapStatefulSet);
 }
 
-async function getStatefulSetDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}) {
-  const { appsV1Api, coreV1Api } = initializeKubernetesClients();
+async function getStatefulSetDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}, clients) {
+  const { appsV1Api, coreV1Api } = clients;
 
   const response = await appsV1Api.readNamespacedStatefulSet({ name, namespace });
   const statefulSet = getResponseBody(response);
@@ -146,7 +145,7 @@ async function getStatefulSetDetails(namespace, name, { includeRelated = false, 
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'StatefulSet', namespace, name, uid: statefulSet.metadata?.uid });
+    events = await getResourceEvents({ kind: 'StatefulSet', namespace, name, uid: statefulSet.metadata?.uid }, clients);
   }
 
   return mapStatefulSetDetails(statefulSet, { relatedPods, events });

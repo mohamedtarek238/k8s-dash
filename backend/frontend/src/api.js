@@ -1,7 +1,29 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5100').replace(/\/$/, '');
 
+let currentClusterId = localStorage.getItem('k8s-dashboard-cluster') || null;
+
+function setCluster(clusterId) {
+  currentClusterId = clusterId;
+  if (clusterId) {
+    localStorage.setItem('k8s-dashboard-cluster', clusterId);
+  } else {
+    localStorage.removeItem('k8s-dashboard-cluster');
+  }
+}
+
+function getCluster() {
+  return currentClusterId;
+}
+
+function appendClusterParam(path) {
+  if (!currentClusterId) return path;
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}cluster=${encodeURIComponent(currentClusterId)}`;
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
+  const fullPath = appendClusterParam(path);
+  const response = await fetch(`${API_URL}${fullPath}`, {
     headers: { Accept: 'application/json', ...(options.headers || {}) },
     ...options,
   });
@@ -22,6 +44,9 @@ const withNamespace = (path, namespace) => namespace ? `${path}?namespace=${enco
 
 export const api = {
   url: API_URL,
+  setCluster,
+  getCluster,
+  clusters: () => list('/api/clusters'),
   status: () => data('/api/status'),
   cluster: () => data('/api/cluster'),
   health: () => data('/api/health'),
@@ -82,4 +107,3 @@ export const api = {
     return data(`/api/resources/${encodeURIComponent(canonical)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/yaml`);
   },
 };
-

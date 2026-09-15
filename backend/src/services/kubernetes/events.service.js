@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody, sortEventsByRecency, involvedObjectToString } = require('../../utils/k8sHelpers');
 
 function mapEvent(event) {
@@ -22,8 +21,8 @@ function mapEvent(event) {
   };
 }
 
-async function listEvents(namespace) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function listEvents(namespace, clients) {
+  const { coreV1Api } = clients;
 
   const response = namespace
     ? await coreV1Api.listNamespacedEvent({ namespace })
@@ -33,8 +32,8 @@ async function listEvents(namespace) {
   return sortEventsByRecency(events);
 }
 
-async function getResourceEvents({ kind, namespace, name, uid } = {}) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function getResourceEvents({ kind, namespace, name, uid } = {}, clients) {
+  const { coreV1Api } = clients;
   let rawEvents = [];
 
   if (namespace) {

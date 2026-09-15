@@ -1,9 +1,9 @@
 const clusterService = require('../services/kubernetes/cluster.service');
 const { sendSuccess } = require('../utils/response');
 
-async function getStatus(_req, res) {
+async function getStatus(req, res) {
   try {
-    await clusterService.checkConnection();
+    await clusterService.checkConnection(req.k8sClients);
     return sendSuccess(res, {
       backend: 'ok',
       kubernetes: 'connected',

@@ -4,20 +4,20 @@ const { sendSuccess, sendList } = require('../utils/response');
 
 async function getDaemonSets(req, res) {
   const { namespace } = req.validatedQuery || {};
-  const data = await daemonSetsService.listDaemonSets(namespace);
+  const data = await daemonSetsService.listDaemonSets(namespace, req.k8sClients);
   return sendList(res, data, namespace ? { namespace } : {});
 }
 
 async function getDaemonSetDetails(req, res) {
   const { namespace, name } = req.validatedParams;
   const { includeRelated, includeEvents } = req.validatedQuery || {};
-  const data = await daemonSetsService.getDaemonSetDetails(namespace, name, { includeRelated, includeEvents });
+  const data = await daemonSetsService.getDaemonSetDetails(namespace, name, { includeRelated, includeEvents }, req.k8sClients);
   return sendSuccess(res, data);
 }
 
 async function getDaemonSetYaml(req, res) {
   const { namespace, name } = req.validatedParams;
-  const data = await yamlService.getResourceYaml('daemonsets', { namespace, name });
+  const data = await yamlService.getResourceYaml('daemonsets', { namespace, name }, req.k8sClients);
   return sendSuccess(res, data);
 }
 

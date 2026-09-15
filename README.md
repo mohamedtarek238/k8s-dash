@@ -48,6 +48,13 @@ It connects directly to your active Kubernetes context using your local `kubecon
 - **Issue Diagnostics**: Real-time warnings and critical issues categorized by severity (`critical`, `warning`, `info`) with recommendations.
 - **Live Event Feed**: Unified event stream sorted newest first with condition tags.
 
+### 🌐 Multi-Cluster Management
+- **Multi-Kubeconfig Registry**: Load multiple Kubernetes clusters via `KUBECONFIGS` environment variable (comma-separated paths) or fallback to standard single-cluster `KUBECONFIG`.
+- **Zero-Downtime Cluster Switching**: Instantly switch clusters from the topbar dropdown without server reboots or frontend reloads.
+- **State Persistence**: Selected cluster persists across browser reloads via `localStorage`.
+- **Cluster Isolation**: Independent API client initialization and CRD discovery caching per cluster.
+- **Cluster Discovery & Health**: `GET /api/clusters` provides sanitized cluster metadata (never leaks credentials).
+
 ### 🪵 Workload & Resource Management
 - **Pods**:
   - Live pod status, container readiness (`x/y`), restart counts, assigned node, and IP.

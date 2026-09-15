@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const {
   getResponseBody,
   calculateAge,
@@ -93,8 +92,8 @@ function mapServiceDetails(service, endpoints, { relatedPods, events } = {}) {
   return data;
 }
 
-async function listServices(namespace) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function listServices(namespace, clients) {
+  const { coreV1Api } = clients;
 
   const response = namespace
     ? await coreV1Api.listNamespacedService({ namespace })
@@ -103,8 +102,8 @@ async function listServices(namespace) {
   return (getResponseBody(response).items || []).map(mapService);
 }
 
-async function getServiceDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}) {
-  const { coreV1Api } = initializeKubernetesClients();
+async function getServiceDetails(namespace, name, { includeRelated = false, includeEvents = false } = {}, clients) {
+  const { coreV1Api } = clients;
 
   const response = await coreV1Api.readNamespacedService({ name, namespace });
   const service = getResponseBody(response);
@@ -114,39 +113,24 @@ async function getServiceDetails(namespace, name, { includeRelated = false, incl
     const epResponse = await coreV1Api.readNamespacedEndpoints({ name, namespace });
     const ep = getResponseBody(epResponse);
     endpoints = {
-      subsets: (ep.subsets || []).map((subset) => ({
-        addresses: (subset.addresses || []).map((addr) => ({
-          ip: addr.ip,
-          nodeName: addr.nodeName || null,
-          targetRef: addr.targetRef
-            ? {
-                kind: addr.targetRef.kind,
-                namespace: addr.targetRef.namespace,
-                name: addr.targetRef.name,
-                uid: addr.targetRef.uid,
-              }
-            : null,
+      subsets: (ep.subsets || []).map((s) => ({
+        addresses: (s.addresses || []).map((a) => ({
+          ip: a.ip,
+          nodeName: a.nodeName || null,
+          targetRef: a.targetRef ? { kind: a.targetRef.kind, name: a.targetRef.name } : null,
         })),
-        notReadyAddresses: (subset.notReadyAddresses || []).map((addr) => ({
-          ip: addr.ip,
-          nodeName: addr.nodeName || null,
-          targetRef: addr.targetRef
-            ? {
-                kind: addr.targetRef.kind,
-                namespace: addr.targetRef.namespace,
-                name: addr.targetRef.name,
-              }
-            : null,
+        notReadyAddresses: (s.notReadyAddresses || []).map((a) => ({
+          ip: a.ip,
+          nodeName: a.nodeName || null,
         })),
-        ports: (subset.ports || []).map((p) => ({
+        ports: (s.ports || []).map((p) => ({
           name: p.name || null,
           port: p.port,
-          protocol: p.protocol || 'TCP',
-          appProtocol: p.appProtocol || null,
+          protocol: p.protocol,
         })),
       })),
     };
-  } catch (_err) {
+  } catch (_e) {
     endpoints = null;
   }
 
@@ -176,7 +160,7 @@ async function getServiceDetails(namespace, name, { includeRelated = false, incl
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'Service', namespace, name, uid: service.metadata?.uid });
+    events = await getResourceEvents({ kind: 'Service', namespace, name, uid: service.metadata?.uid }, clients);
   }
 
   return mapServiceDetails(service, endpoints, { relatedPods, events });

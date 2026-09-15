@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody, calculateAge } = require('../../utils/k8sHelpers');
 const { getResourceEvents } = require('./events.service');
 
@@ -38,14 +37,14 @@ function mapNamespaceDetails(ns, { relatedResources, events } = {}) {
   return data;
 }
 
-async function listNamespaces() {
-  const { coreV1Api } = initializeKubernetesClients();
+async function listNamespaces(clients) {
+  const { coreV1Api } = clients;
   const response = await coreV1Api.listNamespace();
   return (getResponseBody(response).items || []).map(mapNamespace);
 }
 
-async function getNamespaceDetails(name, { includeRelated = false, includeEvents = false } = {}) {
-  const { coreV1Api, appsV1Api } = initializeKubernetesClients();
+async function getNamespaceDetails(name, { includeRelated = false, includeEvents = false } = {}, clients) {
+  const { coreV1Api, appsV1Api } = clients;
 
   const response = await coreV1Api.readNamespace({ name });
   const ns = getResponseBody(response);
@@ -73,7 +72,7 @@ async function getNamespaceDetails(name, { includeRelated = false, includeEvents
 
   let events;
   if (includeEvents) {
-    events = await getResourceEvents({ kind: 'Namespace', namespace: name, name, uid: ns.metadata?.uid });
+    events = await getResourceEvents({ kind: 'Namespace', namespace: name, name, uid: ns.metadata?.uid }, clients);
   }
 
   return mapNamespaceDetails(ns, { relatedResources, events });

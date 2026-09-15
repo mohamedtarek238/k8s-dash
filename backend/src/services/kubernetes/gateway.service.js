@@ -1,4 +1,3 @@
-const { initializeKubernetesClients } = require('../../config/kubernetes');
 const { getResponseBody, calculateAge } = require('../../utils/k8sHelpers');
 const { getResourceEvents } = require('./events.service');
 const {
@@ -119,8 +118,8 @@ function mapHttpRouteBasic(hr, ingressClassMap = {}) {
   };
 }
 
-async function listGateways(namespace) {
-  const { customObjectsApi } = initializeKubernetesClients();
+async function listGateways(namespace, clients) {
+  const { customObjectsApi } = clients;
   try {
     const res = namespace
       ? await customObjectsApi.listNamespacedCustomObject({
@@ -144,8 +143,8 @@ async function listGateways(namespace) {
   }
 }
 
-async function getGatewayDetails(namespace, name) {
-  const { customObjectsApi } = initializeKubernetesClients();
+async function getGatewayDetails(namespace, name, clients) {
+  const { customObjectsApi } = clients;
   const res = await customObjectsApi.getNamespacedCustomObject({
     group: GROUP,
     version: VERSION,
@@ -162,7 +161,7 @@ async function getGatewayDetails(namespace, name) {
       namespace,
       name,
       uid: gw.metadata?.uid,
-    });
+    }, clients);
   } catch (_e) {
     data.events = [];
   }
@@ -170,8 +169,8 @@ async function getGatewayDetails(namespace, name) {
   return data;
 }
 
-async function listGatewayClasses() {
-  const { customObjectsApi } = initializeKubernetesClients();
+async function listGatewayClasses(clients) {
+  const { customObjectsApi } = clients;
   try {
     const res = await customObjectsApi.listClusterCustomObject({
       group: GROUP,
@@ -188,8 +187,8 @@ async function listGatewayClasses() {
   }
 }
 
-async function getGatewayClassDetails(name) {
-  const { customObjectsApi } = initializeKubernetesClients();
+async function getGatewayClassDetails(name, clients) {
+  const { customObjectsApi } = clients;
   const res = await customObjectsApi.getClusterCustomObject({
     group: GROUP,
     version: VERSION,
@@ -200,9 +199,9 @@ async function getGatewayClassDetails(name) {
   return mapGatewayClass(gc);
 }
 
-async function listHttpRoutes(namespace) {
-  const { customObjectsApi } = initializeKubernetesClients();
-  const ingressClassMap = await getIngressClassControllerMap();
+async function listHttpRoutes(namespace, clients) {
+  const { customObjectsApi } = clients;
+  const ingressClassMap = await getIngressClassControllerMap(clients);
 
   try {
     const res = namespace
@@ -227,9 +226,9 @@ async function listHttpRoutes(namespace) {
   }
 }
 
-async function getHttpRouteDetails(namespace, name, { resolvePods = true, includeEvents = true } = {}) {
-  const { customObjectsApi } = initializeKubernetesClients();
-  const ingressClassMap = await getIngressClassControllerMap();
+async function getHttpRouteDetails(namespace, name, { resolvePods = true, includeEvents = true } = {}, clients) {
+  const { customObjectsApi } = clients;
+  const ingressClassMap = await getIngressClassControllerMap(clients);
 
   const res = await customObjectsApi.getNamespacedCustomObject({
     group: GROUP,
@@ -243,7 +242,7 @@ async function getHttpRouteDetails(namespace, name, { resolvePods = true, includ
 
   let resolvedPlugins = [];
   if (basic.kong?.plugins && basic.kong.plugins.length > 0) {
-    resolvedPlugins = await resolveKongPlugins(namespace, basic.kong.plugins);
+    resolvedPlugins = await resolveKongPlugins(namespace, basic.kong.plugins, clients);
   }
 
   const routing = await buildRoutingGraph({
@@ -257,7 +256,7 @@ async function getHttpRouteDetails(namespace, name, { resolvePods = true, includ
     plugins: resolvedPlugins,
     parentRefs: basic.parentRefs,
     resolvePods,
-  });
+  }, clients);
 
   let events = [];
   if (includeEvents) {
@@ -267,7 +266,7 @@ async function getHttpRouteDetails(namespace, name, { resolvePods = true, includ
         namespace,
         name,
         uid: hr.metadata?.uid,
-      });
+      }, clients);
     } catch (_e) {
       events = [];
     }
@@ -288,8 +287,8 @@ async function getHttpRouteDetails(namespace, name, { resolvePods = true, includ
   };
 }
 
-async function listReferenceGrants(namespace) {
-  const { customObjectsApi } = initializeKubernetesClients();
+async function listReferenceGrants(namespace, clients) {
+  const { customObjectsApi } = clients;
   try {
     const res = namespace
       ? await customObjectsApi.listNamespacedCustomObject({

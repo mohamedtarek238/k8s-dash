@@ -100,6 +100,8 @@ All endpoints are prefixed with `/api`.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| GET | `/api/clusters` | List all available Kubernetes clusters |
+| GET | `/api/clusters/:clusterId` | Get cluster metadata by ID |
 | GET | `/api/status` | Backend and Kubernetes connectivity status |
 | GET | `/api/cluster` | Cluster overview (version, counts, health) |
 | GET | `/api/nodes` | List all nodes |

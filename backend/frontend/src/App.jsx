@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowDown, Box, Check, CheckCircle2, ChevronRight, CircleDot, Copy, Cpu, Database,
+  Activity, AlertTriangle, ArrowDown, Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Cpu, Database,
   ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, Menu, Moon, Network,
   Package, PanelLeftClose, PanelLeftOpen, RefreshCw, Route, Search, Server, Settings2, Shield, Sun, Terminal,
   X, Zap
@@ -33,6 +33,80 @@ function useResource(loader, dependencies = []) {
   };
   useEffect(reload, dependencies);
   return { ...state, reload };
+}
+
+function ClusterSwitcher({ clusterId, onClusterChange }) {
+  const [open, setOpen] = useState(false);
+  const clusters = useResource(api.clusters);
+  const items = clusters.data?.data || [];
+
+  const current = items.find((c) => c.id === clusterId) || items.find((c) => c.isDefault) || items[0];
+
+  const handleSelect = (id) => {
+    setOpen(false);
+    if (id !== clusterId) {
+      api.setCluster(id);
+      onClusterChange(id);
+    }
+  };
+
+  if (!items.length) return null;
+
+  return (
+    <div className="cluster-switcher" style={{ position: 'relative' }}>
+      <button
+        className="cluster-switcher-btn"
+        onClick={() => setOpen(!open)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
+          border: '1px solid var(--border)', borderRadius: '8px', background: 'var(--surface)',
+          color: 'var(--text)', cursor: 'pointer', fontSize: '13px', minWidth: '180px',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <Database size={14} style={{ color: 'var(--teal)' }} />
+          <span style={{ fontWeight: 600 }}>{current?.name || 'Select cluster'}</span>
+        </span>
+        <ChevronDown size={14} style={{ opacity: 0.6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+      </button>
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
+          <div
+            className="cluster-dropdown"
+            style={{
+              position: 'absolute', top: '100%', left: 0, marginTop: '4px', zIndex: 100,
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)', minWidth: '260px', overflow: 'hidden',
+            }}
+          >
+            <div style={{ padding: '8px 12px', fontSize: '10px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Available Clusters ({items.length})
+            </div>
+            {items.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => handleSelect(c.id)}
+                style={{
+                  display: 'flex', flexDirection: 'column', width: '100%', padding: '8px 12px',
+                  border: 'none', background: c.id === current?.id ? 'var(--hover)' : 'transparent',
+                  cursor: 'pointer', textAlign: 'left', color: 'var(--text)', fontSize: '13px',
+                  borderLeft: c.id === current?.id ? '3px solid var(--teal)' : '3px solid transparent',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <strong>{c.name}</strong>
+                  {c.isDefault && <span style={{ fontSize: '10px', background: 'var(--teal)', color: '#fff', padding: '1px 6px', borderRadius: '4px' }}>default</span>}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--muted)', marginTop: '2px' }}>{c.server}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function Badge({ children, tone }) { return <span className={`badge ${tone || statusTone(children)}`}><span className="badge-dot" />{display(children)}</span>; }
@@ -786,6 +860,7 @@ function App() {
   const [dark, setDark] = useState(true);
   const [collapsed, setCollapsed] = useState(false);
   const [selected, setSelected] = useState(null);
+  const [currentCluster, setCurrentCluster] = useState(() => api.getCluster());
 
   useEffect(() => {
     const onHash = () => setPage(window.location.hash.slice(1) || 'overview');
@@ -793,15 +868,20 @@ function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  const cluster = useResource(api.cluster);
-  const health = useResource(api.health);
-  const events = useResource(api.events);
-  const status = useResource(api.status);
+  const cluster = useResource(api.cluster, [currentCluster]);
+  const health = useResource(api.health, [currentCluster]);
+  const events = useResource(api.events, [currentCluster]);
+  const status = useResource(api.status, [currentCluster]);
   const overviewReload = () => {
     cluster.reload();
     health.reload();
     events.reload();
     status.reload();
+  };
+
+  const handleClusterChange = (newClusterId) => {
+    setCurrentCluster(newClusterId);
+    setSelected(null);
   };
 
   const isIngress = page === 'ingresses' || page === 'ingress';
@@ -826,22 +906,22 @@ function App() {
     : nav.find((item) => item.key === page)?.label || (page === 'troubleshooting' ? 'Troubleshooting' : 'Overview');
 
   const content = page === 'overview'
-    ? <Overview cluster={cluster} health={health} events={events} loading={cluster.loading} reload={overviewReload} />
+    ? <Overview key={currentCluster} cluster={cluster} health={health} events={events} loading={cluster.loading} reload={overviewReload} />
     : isNodes
-    ? <Nodes onSelect={(node) => setSelected({ type: 'node', value: node })} />
+    ? <Nodes key={currentCluster} onSelect={(node) => setSelected({ type: 'node', value: node })} />
     : isNamespaces
-    ? <Namespaces onSelect={(namespace) => setSelected({ type: 'namespace', value: namespace })} />
+    ? <Namespaces key={currentCluster} onSelect={(namespace) => setSelected({ type: 'namespace', value: namespace })} />
     : isPods
-    ? <Pods onSelect={(pod) => setSelected({ type: 'pod', value: pod })} />
+    ? <Pods key={currentCluster} onSelect={(pod) => setSelected({ type: 'pod', value: pod })} />
     : isDeployments
-    ? <Deployments onSelect={(deployment) => setSelected({ type: 'deployment', value: deployment })} />
+    ? <Deployments key={currentCluster} onSelect={(deployment) => setSelected({ type: 'deployment', value: deployment })} />
     : isServices
-    ? <Services onSelect={(service) => setSelected({ type: 'service', value: service })} />
+    ? <Services key={currentCluster} onSelect={(service) => setSelected({ type: 'service', value: service })} />
     : isIngress
-    ? <Ingresses onSelect={(item) => setSelected(item?.type ? item : { type: 'ingress', value: item })} />
+    ? <Ingresses key={currentCluster} onSelect={(item) => setSelected(item?.type ? item : { type: 'ingress', value: item })} />
     : page === 'events'
-    ? <Events />
-    : <Troubleshooting />;
+    ? <Events key={currentCluster} />
+    : <Troubleshooting key={currentCluster} />;
 
   const isNavActive = (key) => {
     if (page === key) return true;
@@ -898,9 +978,12 @@ function App() {
           <button className="mobile-menu" onClick={() => setCollapsed(!collapsed)}>
             <Menu size={19} />
           </button>
-          <div>
-            <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
-            <strong>{cluster.data?.context || 'Connecting to cluster...'}</strong>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div>
+              <span className="topbar-kicker">KUBERNETES / {title.toUpperCase()}</span>
+              <strong>{cluster.data?.context || 'Connecting to cluster...'}</strong>
+            </div>
+            <ClusterSwitcher clusterId={currentCluster} onClusterChange={handleClusterChange} />
           </div>
           <div className="top-actions">
             <Badge tone={status.data?.kubernetes === 'connected' ? 'success' : 'warning'}>

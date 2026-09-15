@@ -2,6 +2,7 @@ const express = require('express');
 
 const statusRoutes = require('./status.routes');
 const clusterRoutes = require('./cluster.routes');
+const clustersRoutes = require('./clusters.routes');
 const nodesRoutes = require('./nodes.routes');
 const namespacesRoutes = require('./namespaces.routes');
 const podsRoutes = require('./pods.routes');
@@ -20,6 +21,7 @@ const httpRoutesRoutes = require('./httproutes.routes');
 
 const router = express.Router();
 
+router.use('/clusters', clustersRoutes);
 router.use('/status', statusRoutes);
 router.use('/cluster', clusterRoutes);
 router.use('/nodes', nodesRoutes);
