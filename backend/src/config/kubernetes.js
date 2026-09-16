@@ -110,6 +110,7 @@ function createClientsFromKubeConfig(kc) {
     storageV1Api: kc.makeApiClient(k8s.StorageV1Api),
     customObjectsApi: kc.makeApiClient(k8s.CustomObjectsApi),
     apiextensionsV1Api: kc.makeApiClient(k8s.ApiextensionsV1Api),
+    rbacAuthorizationV1Api: kc.makeApiClient(k8s.RbacAuthorizationV1Api),
     versionApi: kc.makeApiClient(k8s.VersionApi),
   };
 }

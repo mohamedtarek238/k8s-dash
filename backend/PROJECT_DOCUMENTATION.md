@@ -263,6 +263,36 @@ Pod log query values:
 | GET | `/api/storage/volumesnapshotcontents/:name` | Path: `name`<br>Query: `cluster` | Returns Volume Snapshot Content details |
 | GET | `/api/storage/volumesnapshotcontents/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Volume Snapshot Content |
 
+### RBAC resources
+
+The dashboard provides a dedicated, read-only RBAC explorer inspecting authentication, authorization, and permission grants across all namespaces and cluster-wide.
+
+| Method | Path | Query/path parameters | Description |
+|---|---|---|---|
+| GET | `/api/rbac/overview` | `?cluster=` | Returns RBAC overview statistics: total ServiceAccounts, Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, namespace distributions, subject breakdowns, and system vs user-created counts |
+| GET | `/api/rbac/serviceaccounts` | Query: `namespace`, `search`, `cluster` | Lists Service Accounts with secrets count, image pull secrets count, automount token flag, creation timestamp, and age |
+| GET | `/api/rbac/serviceaccounts/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents`, `cluster` | Returns Service Account details, referenced secrets, bound RoleBindings, bound ClusterRoleBindings, and resolved inherited permission rules |
+| GET | `/api/rbac/serviceaccounts/:namespace/:name/yaml` | Path: `namespace`, `name`<br>Query: `cluster` | Returns live YAML manifest for Service Account |
+| GET | `/api/rbac/roles` | Query: `namespace`, `search`, `cluster` | Lists Namespaced Roles with rule counts, creation timestamp, and age |
+| GET | `/api/rbac/roles/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents`, `cluster` | Returns Role details, complete rule matrix (verbs, apiGroups, resources, resourceNames, nonResourceURLs), and bound subjects via RoleBindings |
+| GET | `/api/rbac/roles/:namespace/:name/yaml` | Path: `namespace`, `name`<br>Query: `cluster` | Returns live YAML manifest for Role |
+| GET | `/api/rbac/rolebindings` | Query: `namespace`, `search`, `cluster` | Lists Role Bindings with referenced role (Role or ClusterRole), bound subjects, creation timestamp, and age |
+| GET | `/api/rbac/rolebindings/:namespace/:name` | Path: `namespace`, `name`<br>Query: `includeRelated`, `includeEvents`, `cluster` | Returns Role Binding details, subjects list, referenced role details, and inherited permission rules |
+| GET | `/api/rbac/rolebindings/:namespace/:name/yaml` | Path: `namespace`, `name`<br>Query: `cluster` | Returns live YAML manifest for Role Binding |
+| GET | `/api/rbac/clusterroles` | Query: `search`, `cluster` | Lists Cluster Roles with system vs user-created classification, rules count, aggregation rules, creation timestamp, and age |
+| GET | `/api/rbac/clusterroles/:name` | Path: `name`<br>Query: `includeRelated`, `cluster` | Returns Cluster Role details, full rule matrix, aggregation details, and bound subjects across both ClusterRoleBindings and namespaced RoleBindings |
+| GET | `/api/rbac/clusterroles/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Cluster Role |
+| GET | `/api/rbac/clusterrolebindings` | Query: `search`, `cluster` | Lists Cluster Role Bindings with referenced ClusterRole, bound subjects, system vs user classification, creation timestamp, and age |
+| GET | `/api/rbac/clusterrolebindings/:name` | Path: `name`<br>Query: `includeRelated`, `cluster` | Returns Cluster Role Binding details, subjects list, referenced ClusterRole details, and inherited permission rules |
+| GET | `/api/rbac/clusterrolebindings/:name/yaml` | Path: `name`<br>Query: `cluster` | Returns live YAML manifest for Cluster Role Binding |
+
+### RBAC Security and Permissions
+
+RBAC operations in the dashboard are strictly **READ-ONLY**. The backend requires read-only permissions in the target Kubernetes clusters:
+- `core`: `serviceaccounts` (`get`, `list`, `watch`)
+- `rbac.authorization.k8s.io`: `roles`, `rolebindings`, `clusterroles`, `clusterrolebindings` (`get`, `list`, `watch`)
+
+
 ### Resource Details Query Options
 
 The detail endpoints support optional query parameters:

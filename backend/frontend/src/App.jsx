@@ -18,6 +18,7 @@ const nav = [
   { key: 'services', label: 'Services', icon: Network },
   { key: 'ingresses', label: 'Ingress', icon: ExternalLink },
   { key: 'storage', label: 'Storage', icon: HardDrive },
+  { key: 'rbac', label: 'RBAC', icon: Shield },
   { key: 'operators', label: 'Operators & CRDs', icon: Blocks },
   { key: 'events', label: 'Events', icon: Activity },
 ];
@@ -2404,6 +2405,1012 @@ function VolumeSnapshotDetail({ snapshot, onClose }) {
 }
 
 
+
+// ---------------------------------------------------------------------------
+// RBAC Components
+// ---------------------------------------------------------------------------
+
+function verbBadgeTone(verb) {
+  const v = String(verb).toLowerCase();
+  if (v === 'get' || v === 'list' || v === 'watch') return 'info';
+  if (v === 'create' || v === 'update' || v === 'patch') return 'warning';
+  if (v === 'delete' || v === 'deletecollection') return 'danger';
+  if (v === '*') return 'success';
+  return 'muted';
+}
+
+function RBACRuleTable({ rules }) {
+  if (!rules || !rules.length) {
+    return <Empty title="No rules defined" text="This role does not contain any permission rules." />;
+  }
+
+  return (
+    <div className="table-wrap" style={{ marginTop: '12px' }}>
+      <table>
+        <thead>
+          <tr>
+            <th>API Groups</th>
+            <th>Resources</th>
+            <th>Resource Names</th>
+            <th>Verbs</th>
+            <th>Non-Resource URLs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((rule, idx) => (
+            <tr key={idx}>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {(rule.apiGroups || []).length ? (
+                    rule.apiGroups.map((g, i) => (
+                      <Badge key={i} tone="info">{g === '' ? 'core ("")' : g}</Badge>
+                    ))
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+              </td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {(rule.resources || []).length ? (
+                    rule.resources.map((r, i) => (
+                      <Badge key={i}>{r}</Badge>
+                    ))
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+              </td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {(rule.resourceNames || []).length ? (
+                    rule.resourceNames.map((rn, i) => (
+                      <span key={i} className="mono" style={{ fontSize: '12px' }}>{rn}</span>
+                    ))
+                  ) : (
+                    <span className="muted">* (all)</span>
+                  )}
+                </div>
+              </td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {(rule.verbs || []).map((verb, i) => (
+                    <Badge key={i} tone={verbBadgeTone(verb)}>{verb}</Badge>
+                  ))}
+                </div>
+              </td>
+              <td>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                  {(rule.nonResourceURLs || []).length ? (
+                    rule.nonResourceURLs.map((url, i) => (
+                      <span key={i} className="mono" style={{ fontSize: '12px' }}>{url}</span>
+                    ))
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RBACRelationshipFlow() {
+  return (
+    <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1', minWidth: '160px', padding: '12px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <Box size={16} color="#38bdf8" />
+            <strong style={{ fontSize: '13px', color: '#38bdf8' }}>1. Subjects</strong>
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>ServiceAccount / User / Group</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+          <ChevronRight size={18} />
+        </div>
+
+        <div style={{ flex: '1', minWidth: '160px', padding: '12px', background: 'rgba(168, 85, 247, 0.08)', borderRadius: '6px', border: '1px solid rgba(168, 85, 247, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <Network size={16} color="#c084fc" />
+            <strong style={{ fontSize: '13px', color: '#c084fc' }}>2. Binding</strong>
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>RoleBinding (Namespaced) or ClusterRoleBinding</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+          <ChevronRight size={18} />
+        </div>
+
+        <div style={{ flex: '1', minWidth: '160px', padding: '12px', background: 'rgba(245, 158, 11, 0.08)', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <Shield size={16} color="#fbbf24" />
+            <strong style={{ fontSize: '13px', color: '#fbbf24' }}>3. Role Ref</strong>
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Role (in namespace) or ClusterRole (cluster-wide)</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', color: 'var(--text-muted)' }}>
+          <ChevronRight size={18} />
+        </div>
+
+        <div style={{ flex: '1', minWidth: '160px', padding: '12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: '6px', border: '1px solid rgba(34, 197, 94, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+            <CheckCircle2 size={16} color="#4ade80" />
+            <strong style={{ fontSize: '13px', color: '#4ade80' }}>4. Rules & Verbs</strong>
+          </div>
+          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>get, list, watch, create, update, delete on Resources</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCRB }) {
+  console.log("[RBAC DEBUG] RBACPage rendered");
+  const [activeTab, setActiveTab] = useState('overview');
+  const [namespace, setNamespace] = useState('');
+  const [search, setSearch] = useState('');
+
+  const overviewResource = useResource(api.rbacOverview, []);
+  const sasResource = useResource(() => api.serviceAccounts(namespace, { search }), [namespace, search]);
+  const rolesResource = useResource(() => api.roles(namespace, { search }), [namespace, search]);
+  const rbsResource = useResource(() => api.roleBindings(namespace, { search }), [namespace, search]);
+  const crsResource = useResource(() => api.clusterRoles({ search }), [search]);
+  const crbsResource = useResource(() => api.clusterRoleBindings({ search }), [search]);
+
+  const overview = overviewResource.data || {};
+  const sas = sasResource.data?.data || [];
+  const roles = rolesResource.data?.data || [];
+  const rbs = rbsResource.data?.data || [];
+  const crs = crsResource.data?.data || [];
+  const crbs = crbsResource.data?.data || [];
+
+  const reloadAll = () => {
+    overviewResource.reload();
+    sasResource.reload();
+    rolesResource.reload();
+    rbsResource.reload();
+    crsResource.reload();
+    crbsResource.reload();
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Access Control & Security"
+        title="Role-Based Access Control (RBAC)"
+        description="Explore Service Accounts, Roles, Role Bindings, Cluster Roles, and Cluster Role Bindings across the cluster."
+        action={
+          <button className="button subtle" onClick={reloadAll}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        }
+      />
+
+      <div className="metrics-grid">
+        <Metric
+          icon={Box}
+          label="Service Accounts"
+          value={overview.serviceAccounts?.total ?? sas.length}
+          detail={`${overview.serviceAccounts?.namespacesCount ?? 0} active namespaces`}
+          accent="teal"
+        />
+        <Metric
+          icon={Shield}
+          label="Namespaced Roles"
+          value={overview.roles?.total ?? roles.length}
+          detail={`${overview.roles?.namespacesCount ?? 0} namespaces`}
+          accent="blue"
+        />
+        <Metric
+          icon={Network}
+          label="Role Bindings"
+          value={overview.roleBindings?.total ?? rbs.length}
+          detail={`${overview.roleBindings?.referencingClusterRoles ?? 0} ref ClusterRole`}
+          accent="amber"
+        />
+        <Metric
+          icon={Shield}
+          label="Cluster Roles"
+          value={overview.clusterRoles?.total ?? crs.length}
+          detail={`${overview.clusterRoles?.userCreated ?? 0} user · ${overview.clusterRoles?.system ?? 0} system`}
+          accent="coral"
+        />
+        <Metric
+          icon={Network}
+          label="Cluster Role Bindings"
+          value={overview.clusterRoleBindings?.total ?? crbs.length}
+          detail={`${overview.clusterRoleBindings?.userCreated ?? 0} user · ${overview.clusterRoleBindings?.system ?? 0} system`}
+          accent="purple"
+        />
+      </div>
+
+      <div className="sub-nav-tabs">
+        <button
+          className={`sub-nav-tab ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          <LayoutDashboard size={15} /> Overview
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'serviceaccounts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('serviceaccounts')}
+        >
+          <Box size={15} /> Service Accounts ({overview.serviceAccounts?.total ?? sas.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'roles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('roles')}
+        >
+          <Shield size={15} /> Roles ({overview.roles?.total ?? roles.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'rolebindings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('rolebindings')}
+        >
+          <Network size={15} /> Role Bindings ({overview.roleBindings?.total ?? rbs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'clusterroles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('clusterroles')}
+        >
+          <Shield size={15} /> Cluster Roles ({overview.clusterRoles?.total ?? crs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'clusterrolebindings' ? 'active' : ''}`}
+          onClick={() => setActiveTab('clusterrolebindings')}
+        >
+          <Network size={15} /> Cluster Role Bindings ({overview.clusterRoleBindings?.total ?? crbs.length})
+        </button>
+      </div>
+
+      {activeTab !== 'overview' && (
+        <Toolbar search={search} setSearch={setSearch} onRefresh={reloadAll}>
+          {(activeTab === 'serviceaccounts' || activeTab === 'roles' || activeTab === 'rolebindings') && (
+            <input
+              className="select"
+              value={namespace}
+              onChange={(e) => setNamespace(e.target.value)}
+              placeholder="All namespaces"
+            />
+          )}
+        </Toolbar>
+      )}
+
+      {activeTab === 'overview' ? (
+        overviewResource.loading ? (
+          <Loading rows={4} />
+        ) : overviewResource.error ? (
+          <ErrorState error={overviewResource.error} reload={overviewResource.reload} />
+        ) : (
+          <>
+            <div className="storage-overview-grid">
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><Shield size={16} /> Roles & Scopes</h3>
+                  <Badge tone="teal">{(overview.roles?.total ?? 0) + (overview.clusterRoles?.total ?? 0)} Total</Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Namespaced Roles</span>
+                    <Badge tone="info">{overview.roles?.total ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Cluster-Wide Roles</span>
+                    <Badge tone="success">{overview.clusterRoles?.total ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>User-Defined Cluster Roles</span>
+                    <Badge tone="teal">{overview.clusterRoles?.userCreated ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Kubernetes System Roles</span>
+                    <Badge tone="warning">{overview.clusterRoles?.system ?? 0}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><Network size={16} /> Bindings & Assignments</h3>
+                  <Badge tone="blue">{(overview.roleBindings?.total ?? 0) + (overview.clusterRoleBindings?.total ?? 0)} Total</Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Namespaced RoleBindings</span>
+                    <Badge tone="info">{overview.roleBindings?.total ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>ClusterRoleBindings</span>
+                    <Badge tone="success">{overview.clusterRoleBindings?.total ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Bindings referencing Role</span>
+                    <Badge tone="teal">{overview.roleBindings?.referencingRoles ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Bindings referencing ClusterRole</span>
+                    <Badge tone="purple">{overview.roleBindings?.referencingClusterRoles ?? 0}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="storage-overview-card">
+                <div className="storage-overview-card-header">
+                  <h3><Box size={16} /> Bound Subjects Distribution</h3>
+                  <Badge tone="amber">
+                    {(overview.subjectsBreakdown?.serviceAccounts ?? 0) + (overview.subjectsBreakdown?.users ?? 0) + (overview.subjectsBreakdown?.groups ?? 0)} Bound
+                  </Badge>
+                </div>
+                <div className="storage-breakdown-list">
+                  <div className="storage-breakdown-item">
+                    <span>Service Accounts</span>
+                    <Badge tone="teal">{overview.subjectsBreakdown?.serviceAccounts ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Users</span>
+                    <Badge tone="info">{overview.subjectsBreakdown?.users ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Groups</span>
+                    <Badge tone="amber">{overview.subjectsBreakdown?.groups ?? 0}</Badge>
+                  </div>
+                  <div className="storage-breakdown-item">
+                    <span>Namespaces with RBAC</span>
+                    <Badge tone="success">{overview.namespacesCount ?? 0}</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Authorization Model</span>
+                  <h2>Kubernetes RBAC Architecture</h2>
+                </div>
+                <Badge tone="info">RBAC v1</Badge>
+              </div>
+              <RBACRelationshipFlow />
+            </section>
+          </>
+        )
+      ) : activeTab === 'serviceaccounts' ? (
+        sasResource.loading ? (
+          <Loading rows={5} />
+        ) : sasResource.error ? (
+          <ErrorState error={sasResource.error} reload={sasResource.reload} />
+        ) : (
+          <Table
+            rows={sas}
+            onRow={onSelectSA}
+            emptyTitle="No Service Accounts found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Service Account',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Box size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              { key: 'namespace', label: 'Namespace' },
+              {
+                key: 'secretsCount',
+                label: 'Secrets',
+                render: (r) => <Badge tone="info">{r.secretsCount}</Badge>,
+              },
+              {
+                key: 'automountServiceAccountToken',
+                label: 'Automount Token',
+                render: (r) => (
+                  <Badge tone={r.automountServiceAccountToken ? 'success' : 'muted'}>
+                    {r.automountServiceAccountToken ? 'Enabled' : 'Disabled'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'roles' ? (
+        rolesResource.loading ? (
+          <Loading rows={5} />
+        ) : rolesResource.error ? (
+          <ErrorState error={rolesResource.error} reload={rolesResource.reload} />
+        ) : (
+          <Table
+            rows={roles}
+            onRow={onSelectRole}
+            emptyTitle="No Roles found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Role Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Shield size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              { key: 'namespace', label: 'Namespace' },
+              {
+                key: 'rulesCount',
+                label: 'Rules',
+                render: (r) => <Badge tone="teal">{r.rulesCount} Rules</Badge>,
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'rolebindings' ? (
+        rbsResource.loading ? (
+          <Loading rows={5} />
+        ) : rbsResource.error ? (
+          <ErrorState error={rbsResource.error} reload={rbsResource.reload} />
+        ) : (
+          <Table
+            rows={rbs}
+            onRow={onSelectRB}
+            emptyTitle="No Role Bindings found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Role Binding',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Network size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              { key: 'namespace', label: 'Namespace' },
+              {
+                key: 'roleRef',
+                label: 'Referenced Role',
+                render: (r) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Badge tone={r.roleRef?.kind === 'ClusterRole' ? 'purple' : 'info'}>
+                      {r.roleRef?.kind}
+                    </Badge>
+                    <span className="mono">{r.roleRef?.name}</span>
+                  </div>
+                ),
+              },
+              {
+                key: 'subjectsCount',
+                label: 'Subjects',
+                render: (r) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Badge tone="teal">{r.subjectsCount}</Badge>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {(r.subjects || []).map((s) => `${s.kind}: ${s.name}`).slice(0, 2).join(', ')}
+                      {(r.subjects || []).length > 2 ? ' ...' : ''}
+                    </span>
+                  </div>
+                ),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'clusterroles' ? (
+        crsResource.loading ? (
+          <Loading rows={5} />
+        ) : crsResource.error ? (
+          <ErrorState error={crsResource.error} reload={crsResource.reload} />
+        ) : (
+          <Table
+            rows={crs}
+            onRow={onSelectCR}
+            emptyTitle="No Cluster Roles found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Cluster Role Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Shield size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              {
+                key: 'isSystem',
+                label: 'Type',
+                render: (r) => (
+                  <Badge tone={r.isSystem ? 'warning' : 'success'}>
+                    {r.isSystem ? 'System' : 'User-Created'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'rulesCount',
+                label: 'Rules',
+                render: (r) => <Badge tone="teal">{r.rulesCount} Rules</Badge>,
+              },
+              {
+                key: 'aggregationRule',
+                label: 'Aggregation',
+                render: (r) => (
+                  r.aggregationRule ? <Badge tone="purple">Aggregated</Badge> : <span className="muted">Direct</span>
+                ),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : activeTab === 'clusterrolebindings' ? (
+        crbsResource.loading ? (
+          <Loading rows={5} />
+        ) : crbsResource.error ? (
+          <ErrorState error={crbsResource.error} reload={crbsResource.reload} />
+        ) : (
+          <Table
+            rows={crbs}
+            onRow={onSelectCRB}
+            emptyTitle="No Cluster Role Bindings found"
+            columns={[
+              {
+                key: 'name',
+                label: 'Binding Name',
+                render: (r) => (
+                  <strong className="resource-name">
+                    <Network size={16} />
+                    {r.name}
+                  </strong>
+                ),
+              },
+              {
+                key: 'isSystem',
+                label: 'Type',
+                render: (r) => (
+                  <Badge tone={r.name?.startsWith('system:') ? 'warning' : 'success'}>
+                    {r.name?.startsWith('system:') ? 'System' : 'User-Created'}
+                  </Badge>
+                ),
+              },
+              {
+                key: 'roleRef',
+                label: 'Referenced ClusterRole',
+                render: (r) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Badge tone="purple">ClusterRole</Badge>
+                    <span className="mono">{r.roleRef?.name}</span>
+                  </div>
+                ),
+              },
+              {
+                key: 'subjectsCount',
+                label: 'Subjects',
+                render: (r) => (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Badge tone="teal">{r.subjectsCount}</Badge>
+                    <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {(r.subjects || []).map((s) => `${s.kind}: ${s.name}`).slice(0, 2).join(', ')}
+                      {(r.subjects || []).length > 2 ? ' ...' : ''}
+                    </span>
+                  </div>
+                ),
+              },
+              {
+                key: 'age',
+                label: 'Age',
+                render: (r) => r.age || age(r.creationTimestamp),
+              },
+            ]}
+          />
+        )
+      ) : null}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// RBAC Detail Drawers
+// ---------------------------------------------------------------------------
+
+function ServiceAccountDetail({ serviceAccount, onClose, onSelectRB, onSelectCRB }) {
+  const detail = useResource(
+    () => api.serviceAccount(serviceAccount.namespace, serviceAccount.name),
+    [serviceAccount.namespace, serviceAccount.name]
+  );
+  const data = detail.data || serviceAccount;
+  const related = data.related || {};
+
+  return (
+    <DetailPanel
+      key={`sa-${serviceAccount.namespace}-${serviceAccount.name}`}
+      title={serviceAccount.name}
+      resourceType="serviceaccounts"
+      namespace={serviceAccount.namespace}
+      name={serviceAccount.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="teal">ServiceAccount</Badge>
+            <Badge tone={data.automountServiceAccountToken ? 'success' : 'muted'}>
+              {data.automountServiceAccountToken ? 'Token Automount: Yes' : 'Token Automount: No'}
+            </Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              Namespace: data.namespace,
+              'Automount Token': data.automountServiceAccountToken ? 'true' : 'false',
+              'Secrets Count': (data.secrets || []).length,
+              'Image Pull Secrets': (data.imagePullSecrets || []).length,
+              Created: formatDate(data.creationTimestamp),
+              Age: data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          {data.secrets && data.secrets.length > 0 && (
+            <>
+              <h3>Referenced Secrets</h3>
+              <div className="mini-list">
+                {data.secrets.map((sec, i) => (
+                  <div key={i}>
+                    <strong><Box size={14} /> {sec.name}</strong>
+                    <span>Secret Reference</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <h3>Bound RoleBindings ({related.roleBindings?.length || 0})</h3>
+          {related.roleBindings?.length ? (
+            <div className="mini-list">
+              {related.roleBindings.map((rb, i) => (
+                <div key={i} className="clickable" onClick={() => onSelectRB?.(rb)}>
+                  <div>
+                    <strong><Network size={14} /> {rb.name}</strong>
+                    <span>Ref: {rb.roleRef?.kind} / {rb.roleRef?.name}</span>
+                  </div>
+                  <Badge tone="info">{rb.namespace}</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="muted" style={{ fontSize: '13px' }}>No namespaced RoleBindings directly bind this ServiceAccount.</span>
+          )}
+
+          <h3>Bound ClusterRoleBindings ({related.clusterRoleBindings?.length || 0})</h3>
+          {related.clusterRoleBindings?.length ? (
+            <div className="mini-list">
+              {related.clusterRoleBindings.map((crb, i) => (
+                <div key={i} className="clickable" onClick={() => onSelectCRB?.(crb)}>
+                  <div>
+                    <strong><Network size={14} /> {crb.name}</strong>
+                    <span>Ref: {crb.roleRef?.kind} / {crb.roleRef?.name}</span>
+                  </div>
+                  <Badge tone="purple">Cluster-Wide</Badge>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="muted" style={{ fontSize: '13px' }}>No ClusterRoleBindings directly bind this ServiceAccount.</span>
+          )}
+
+          {related.resolvedRoles && related.resolvedRoles.length > 0 && (
+            <>
+              <h3>Inherited Permission Rules</h3>
+              {related.resolvedRoles.map((role, idx) => (
+                <div key={idx} style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '13px' }}>
+                      <Shield size={14} /> {role.name} ({role.bindingType})
+                    </strong>
+                    <Badge tone="teal">{role.rulesCount || (role.rules || []).length} Rules</Badge>
+                  </div>
+                  <RBACRuleTable rules={role.rules} />
+                </div>
+              ))}
+            </>
+          )}
+
+          {data.events && data.events.length > 0 && (
+            <>
+              <h3>Related Events</h3>
+              <EventTable events={data.events} />
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function RoleDetail({ role, onClose, onSelectSA }) {
+  const detail = useResource(() => api.role(role.namespace, role.name), [role.namespace, role.name]);
+  const data = detail.data || role;
+  const related = data.related || {};
+
+  return (
+    <DetailPanel
+      key={`role-${role.namespace}-${role.name}`}
+      title={role.name}
+      resourceType="roles"
+      namespace={role.namespace}
+      name={role.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="info">Namespaced Role</Badge>
+            <Badge tone="teal">{data.rulesCount || (data.rules || []).length} Rules</Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              Namespace: data.namespace,
+              'Rules Count': data.rulesCount || (data.rules || []).length,
+              Created: formatDate(data.creationTimestamp),
+              Age: data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Permission Rules</h3>
+          <RBACRuleTable rules={data.rules} />
+
+          <h3>Bound Subjects ({related.boundSubjects?.length || 0})</h3>
+          {related.boundSubjects?.length ? (
+            <div className="mini-list">
+              {related.boundSubjects.map((sub, i) => (
+                <div key={i} className={sub.kind === 'ServiceAccount' ? 'clickable' : ''} onClick={() => sub.kind === 'ServiceAccount' && onSelectSA?.(sub)}>
+                  <div>
+                    <strong><Box size={14} /> {sub.kind}: {sub.name}</strong>
+                    <span>Via RoleBinding: {sub.viaRoleBinding}</span>
+                  </div>
+                  {sub.namespace && <Badge tone="info">{sub.namespace}</Badge>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="muted" style={{ fontSize: '13px' }}>No subjects currently bound via RoleBindings.</span>
+          )}
+
+          {data.events && data.events.length > 0 && (
+            <>
+              <h3>Related Events</h3>
+              <EventTable events={data.events} />
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function RoleBindingDetail({ roleBinding, onClose, onSelectSA, onSelectRole }) {
+  const detail = useResource(
+    () => api.roleBinding(roleBinding.namespace, roleBinding.name),
+    [roleBinding.namespace, roleBinding.name]
+  );
+  const data = detail.data || roleBinding;
+  const related = data.related || {};
+
+  return (
+    <DetailPanel
+      key={`rb-${roleBinding.namespace}-${roleBinding.name}`}
+      title={roleBinding.name}
+      resourceType="rolebindings"
+      namespace={roleBinding.namespace}
+      name={roleBinding.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="teal">RoleBinding</Badge>
+            <Badge tone={data.roleRef?.kind === 'ClusterRole' ? 'purple' : 'info'}>
+              Ref: {data.roleRef?.kind}
+            </Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              Namespace: data.namespace,
+              'Role Ref Kind': data.roleRef?.kind,
+              'Role Ref Name': data.roleRef?.name,
+              'API Group': data.roleRef?.apiGroup,
+              'Subjects Count': (data.subjects || []).length,
+              Created: formatDate(data.creationTimestamp),
+              Age: data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Bound Subjects ({(data.subjects || []).length})</h3>
+          <div className="mini-list">
+            {(data.subjects || []).map((sub, i) => (
+              <div key={i} className={sub.kind === 'ServiceAccount' ? 'clickable' : ''} onClick={() => sub.kind === 'ServiceAccount' && onSelectSA?.(sub)}>
+                <div>
+                  <strong><Box size={14} /> {sub.kind}: {sub.name}</strong>
+                  <span>{sub.namespace ? `Namespace: ${sub.namespace}` : 'Cluster-Scoped User/Group'}</span>
+                </div>
+                <Badge tone="info">{sub.kind}</Badge>
+              </div>
+            ))}
+          </div>
+
+          <h3>Inherited Permissions from {data.roleRef?.kind}: {data.roleRef?.name}</h3>
+          <RBACRuleTable rules={related.rules} />
+
+          {data.events && data.events.length > 0 && (
+            <>
+              <h3>Related Events</h3>
+              <EventTable events={data.events} />
+            </>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function ClusterRoleDetail({ clusterRole, onClose, onSelectSA }) {
+  const detail = useResource(() => api.clusterRole(clusterRole.name), [clusterRole.name]);
+  const data = detail.data || clusterRole;
+  const related = data.related || {};
+
+  return (
+    <DetailPanel
+      key={`cr-${clusterRole.name}`}
+      title={clusterRole.name}
+      resourceType="clusterroles"
+      name={clusterRole.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="purple">ClusterRole</Badge>
+            <Badge tone={data.isSystem ? 'warning' : 'success'}>
+              {data.isSystem ? 'System' : 'User-Created'}
+            </Badge>
+            <Badge tone="teal">{data.rulesCount || (data.rules || []).length} Rules</Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              'Cluster Role': data.name,
+              Type: data.isSystem ? 'System Component' : 'User-Created',
+              'Rules Count': data.rulesCount || (data.rules || []).length,
+              Aggregation: data.aggregationRule ? 'Aggregated' : 'None',
+              Created: formatDate(data.creationTimestamp),
+              Age: data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Permission Rules</h3>
+          <RBACRuleTable rules={data.rules} />
+
+          <h3>Bound Subjects ({related.boundSubjects?.length || 0})</h3>
+          {related.boundSubjects?.length ? (
+            <div className="mini-list">
+              {related.boundSubjects.map((sub, i) => (
+                <div key={i} className={sub.kind === 'ServiceAccount' ? 'clickable' : ''} onClick={() => sub.kind === 'ServiceAccount' && onSelectSA?.(sub)}>
+                  <div>
+                    <strong><Box size={14} /> {sub.kind}: {sub.name}</strong>
+                    <span>Via {sub.bindingType}: {sub.bindingName}</span>
+                  </div>
+                  {sub.namespace && <Badge tone="info">{sub.namespace}</Badge>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className="muted" style={{ fontSize: '13px' }}>No subjects currently bound to this ClusterRole.</span>
+          )}
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function ClusterRoleBindingDetail({ clusterRoleBinding, onClose, onSelectSA, onSelectCR }) {
+  const detail = useResource(() => api.clusterRoleBinding(clusterRoleBinding.name), [clusterRoleBinding.name]);
+  const data = detail.data || clusterRoleBinding;
+  const related = data.related || {};
+
+  return (
+    <DetailPanel
+      key={`crb-${clusterRoleBinding.name}`}
+      title={clusterRoleBinding.name}
+      resourceType="clusterrolebindings"
+      name={clusterRoleBinding.name}
+      onClose={onClose}
+    >
+      {detail.loading ? (
+        <Loading rows={4} />
+      ) : detail.error ? (
+        <ErrorState error={detail.error} reload={detail.reload} />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+            <Badge tone="purple">ClusterRoleBinding</Badge>
+            <Badge tone={data.name?.startsWith('system:') ? 'warning' : 'success'}>
+              {data.name?.startsWith('system:') ? 'System' : 'User-Created'}
+            </Badge>
+          </div>
+
+          <KeyValues
+            values={{
+              'Binding Name': data.name,
+              'Role Ref Kind': data.roleRef?.kind,
+              'Referenced ClusterRole': data.roleRef?.name,
+              'API Group': data.roleRef?.apiGroup,
+              'Subjects Count': (data.subjects || []).length,
+              Created: formatDate(data.creationTimestamp),
+              Age: data.age || age(data.creationTimestamp),
+            }}
+          />
+
+          <h3>Bound Subjects ({(data.subjects || []).length})</h3>
+          <div className="mini-list">
+            {(data.subjects || []).map((sub, i) => (
+              <div key={i} className={sub.kind === 'ServiceAccount' ? 'clickable' : ''} onClick={() => sub.kind === 'ServiceAccount' && onSelectSA?.(sub)}>
+                <div>
+                  <strong><Box size={14} /> {sub.kind}: {sub.name}</strong>
+                  <span>{sub.namespace ? `Namespace: ${sub.namespace}` : 'Cluster-Scoped User/Group'}</span>
+                </div>
+                <Badge tone="info">{sub.kind}</Badge>
+              </div>
+            ))}
+          </div>
+
+          <h3>Inherited Permissions from ClusterRole: {data.roleRef?.name}</h3>
+          <RBACRuleTable rules={related.rules} />
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+
 function Troubleshooting() {
   console.log("[TROUBLESHOOTING DEBUG] TroubleshootingPage rendered");
   const resource = useResource(api.troubleshooting); const groups = resource.data || {}; return <><PageHeader eyebrow="Observability" title="Troubleshooting" description="Actionable issues grouped by severity from backend diagnostics." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <div className="diagnostic-grid">{['critical', 'warning', 'info'].map((severity) => <section className="panel" key={severity}><div className="panel-head"><h2>{severity}</h2><Badge tone={severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'}>{groups[severity]?.length || 0}</Badge></div>{groups[severity]?.length ? <div className="issue-list">{groups[severity].map((issue, i) => <div className="issue" key={i}><div><strong>{issue.resourceName}</strong><span>{issue.message}</span><small>{issue.recommendation}</small></div></div>)}</div> : <Empty title={`No ${severity} issues`} text="No diagnostics were returned in this category." />}</section>)}</div>}</>; }
@@ -2448,12 +3455,15 @@ function App() {
   const isServices = page === 'services' || page === 'service';
   const isIngress = page === 'ingresses' || page === 'ingress';
   const isStorage = page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot';
+  const isRBAC = page === 'rbac' || page === 'serviceaccount' || page === 'serviceaccounts' || page === 'role' || page === 'roles' || page === 'rolebinding' || page === 'rolebindings' || page === 'clusterrole' || page === 'clusterroles' || page === 'clusterrolebinding' || page === 'clusterrolebindings';
   const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
   const isEvents = page === 'events' || page === 'event';
   const isTroubleshooting = page === 'troubleshooting';
 
   const title = isStorage
     ? 'Storage'
+    : isRBAC
+    ? 'Role-Based Access Control'
     : isTroubleshooting
     ? 'Troubleshooting'
     : isOperators
@@ -2482,6 +3492,15 @@ function App() {
         onSelectSC={(sc) => setSelected({ type: 'storageclass', value: sc })}
         onSelectCSI={(csi) => setSelected({ type: 'csidriver', value: csi })}
         onSelectSnapshot={(snap) => setSelected({ type: 'volumesnapshot', value: snap })}
+      />
+    : isRBAC
+    ? <RBACView
+        key={currentCluster}
+        onSelectSA={(sa) => setSelected({ type: 'serviceaccount', value: sa })}
+        onSelectRole={(role) => setSelected({ type: 'role', value: role })}
+        onSelectRB={(rb) => setSelected({ type: 'rolebinding', value: rb })}
+        onSelectCR={(cr) => setSelected({ type: 'clusterrole', value: cr })}
+        onSelectCRB={(crb) => setSelected({ type: 'clusterrolebinding', value: crb })}
       />
     : isTroubleshooting
     ? <Troubleshooting key={currentCluster} />
@@ -2512,6 +3531,7 @@ function App() {
     if (key === 'services' && (page === 'services' || page === 'service')) return true;
     if (key === 'ingresses' && (page === 'ingresses' || page === 'ingress')) return true;
     if (key === 'storage' && (page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot')) return true;
+    if (key === 'rbac' && (page === 'rbac' || page === 'serviceaccount' || page === 'serviceaccounts' || page === 'role' || page === 'roles' || page === 'rolebinding' || page === 'rolebindings' || page === 'clusterrole' || page === 'clusterroles' || page === 'clusterrolebinding' || page === 'clusterrolebindings')) return true;
     if (key === 'operators' && (page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd')) return true;
     if (key === 'events' && (page === 'events' || page === 'event')) return true;
     if (key === 'troubleshooting' && page === 'troubleshooting') return true;
@@ -2618,6 +3638,44 @@ function App() {
         <VolumeSnapshotDetail
           snapshot={selected.value}
           onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'serviceaccount' && (
+        <ServiceAccountDetail
+          serviceAccount={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectRB={(rb) => setSelected({ type: 'rolebinding', value: rb })}
+          onSelectCRB={(crb) => setSelected({ type: 'clusterrolebinding', value: crb })}
+        />
+      )}
+      {selected?.type === 'role' && (
+        <RoleDetail
+          role={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectSA={(sa) => setSelected({ type: 'serviceaccount', value: sa })}
+        />
+      )}
+      {selected?.type === 'rolebinding' && (
+        <RoleBindingDetail
+          roleBinding={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectSA={(sa) => setSelected({ type: 'serviceaccount', value: sa })}
+          onSelectRole={(role) => setSelected({ type: 'role', value: role })}
+        />
+      )}
+      {selected?.type === 'clusterrole' && (
+        <ClusterRoleDetail
+          clusterRole={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectSA={(sa) => setSelected({ type: 'serviceaccount', value: sa })}
+        />
+      )}
+      {selected?.type === 'clusterrolebinding' && (
+        <ClusterRoleBindingDetail
+          clusterRoleBinding={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectSA={(sa) => setSelected({ type: 'serviceaccount', value: sa })}
+          onSelectCR={(cr) => setSelected({ type: 'clusterrole', value: cr })}
         />
       )}
       {selected?.type === 'crd' && (

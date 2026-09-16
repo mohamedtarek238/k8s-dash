@@ -464,6 +464,94 @@ const SUPPORTED_RESOURCES = {
         name,
       }),
   },
+  serviceaccount: {
+    canonical: 'serviceaccounts',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'ServiceAccount',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedServiceAccount({ name, namespace }),
+  },
+  serviceaccounts: {
+    canonical: 'serviceaccounts',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'ServiceAccount',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedServiceAccount({ name, namespace }),
+  },
+  sa: {
+    canonical: 'serviceaccounts',
+    namespaced: true,
+    apiVersion: 'v1',
+    kind: 'ServiceAccount',
+    fetch: (clients, { namespace, name }) =>
+      clients.coreV1Api.readNamespacedServiceAccount({ name, namespace }),
+  },
+  role: {
+    canonical: 'roles',
+    namespaced: true,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'Role',
+    fetch: (clients, { namespace, name }) =>
+      clients.rbacAuthorizationV1Api.readNamespacedRole({ name, namespace }),
+  },
+  roles: {
+    canonical: 'roles',
+    namespaced: true,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'Role',
+    fetch: (clients, { namespace, name }) =>
+      clients.rbacAuthorizationV1Api.readNamespacedRole({ name, namespace }),
+  },
+  rolebinding: {
+    canonical: 'rolebindings',
+    namespaced: true,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'RoleBinding',
+    fetch: (clients, { namespace, name }) =>
+      clients.rbacAuthorizationV1Api.readNamespacedRoleBinding({ name, namespace }),
+  },
+  rolebindings: {
+    canonical: 'rolebindings',
+    namespaced: true,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'RoleBinding',
+    fetch: (clients, { namespace, name }) =>
+      clients.rbacAuthorizationV1Api.readNamespacedRoleBinding({ name, namespace }),
+  },
+  clusterrole: {
+    canonical: 'clusterroles',
+    namespaced: false,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'ClusterRole',
+    fetch: (clients, { name }) =>
+      clients.rbacAuthorizationV1Api.readClusterRole({ name }),
+  },
+  clusterroles: {
+    canonical: 'clusterroles',
+    namespaced: false,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'ClusterRole',
+    fetch: (clients, { name }) =>
+      clients.rbacAuthorizationV1Api.readClusterRole({ name }),
+  },
+  clusterrolebinding: {
+    canonical: 'clusterrolebindings',
+    namespaced: false,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'ClusterRoleBinding',
+    fetch: (clients, { name }) =>
+      clients.rbacAuthorizationV1Api.readClusterRoleBinding({ name }),
+  },
+  clusterrolebindings: {
+    canonical: 'clusterrolebindings',
+    namespaced: false,
+    apiVersion: 'rbac.authorization.k8s.io/v1',
+    kind: 'ClusterRoleBinding',
+    fetch: (clients, { name }) =>
+      clients.rbacAuthorizationV1Api.readClusterRoleBinding({ name }),
+  },
 };
 
 /**

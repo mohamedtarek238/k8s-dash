@@ -138,6 +138,37 @@ export const api = {
   volumeSnapshotClass: (name) => data(`/api/storage/volumesnapshotclasses/${encodeURIComponent(name)}`),
   volumeSnapshotContents: () => data('/api/storage/volumesnapshotcontents'),
   volumeSnapshotContent: (name) => data(`/api/storage/volumesnapshotcontents/${encodeURIComponent(name)}`),
+  rbacOverview: () => data('/api/rbac/overview'),
+  serviceAccounts: (namespace, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(withNamespace('/api/rbac/serviceaccounts', namespace) + (query.toString() ? `${namespace ? '&' : '?'}${query}` : ''));
+  },
+  serviceAccount: (namespace, name) => data(`/api/rbac/serviceaccounts/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}?includeRelated=true&includeEvents=true`),
+  roles: (namespace, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(withNamespace('/api/rbac/roles', namespace) + (query.toString() ? `${namespace ? '&' : '?'}${query}` : ''));
+  },
+  role: (namespace, name) => data(`/api/rbac/roles/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}?includeRelated=true&includeEvents=true`),
+  roleBindings: (namespace, params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(withNamespace('/api/rbac/rolebindings', namespace) + (query.toString() ? `${namespace ? '&' : '?'}${query}` : ''));
+  },
+  roleBinding: (namespace, name) => data(`/api/rbac/rolebindings/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}?includeRelated=true&includeEvents=true`),
+  clusterRoles: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(`/api/rbac/clusterroles${query.toString() ? `?${query}` : ''}`);
+  },
+  clusterRole: (name) => data(`/api/rbac/clusterroles/${encodeURIComponent(name)}?includeRelated=true`),
+  clusterRoleBindings: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.search) query.set('search', params.search);
+    return list(`/api/rbac/clusterrolebindings${query.toString() ? `?${query}` : ''}`);
+  },
+  clusterRoleBinding: (name) => data(`/api/rbac/clusterrolebindings/${encodeURIComponent(name)}?includeRelated=true`),
   yaml: (resourceType, namespace, name) => {
     const pluralMap = {
       pod: 'pods',
@@ -179,6 +210,17 @@ export const api = {
       volumesnapshotclasses: 'volumesnapshotclasses',
       volumesnapshotcontent: 'volumesnapshotcontents',
       volumesnapshotcontents: 'volumesnapshotcontents',
+      sa: 'serviceaccounts',
+      serviceaccount: 'serviceaccounts',
+      serviceaccounts: 'serviceaccounts',
+      role: 'roles',
+      roles: 'roles',
+      rolebinding: 'rolebindings',
+      rolebindings: 'rolebindings',
+      clusterrole: 'clusterroles',
+      clusterroles: 'clusterroles',
+      clusterrolebinding: 'clusterrolebindings',
+      clusterrolebindings: 'clusterrolebindings',
     };
     const canonical = pluralMap[resourceType?.toLowerCase()] || resourceType;
     if (!namespace) {

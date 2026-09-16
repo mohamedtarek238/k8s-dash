@@ -105,6 +105,11 @@ const resourceTypeSchema = z.enum([
   'volumesnapshots', 'volumesnapshot',
   'volumesnapshotclasses', 'volumesnapshotclass',
   'volumesnapshotcontents', 'volumesnapshotcontent',
+  'serviceaccounts', 'serviceaccount', 'sa',
+  'roles', 'role',
+  'rolebindings', 'rolebinding',
+  'clusterroles', 'clusterrole',
+  'clusterrolebindings', 'clusterrolebinding',
 ]);
 
 const genericNamespacedResourceParamsSchema = z.object({

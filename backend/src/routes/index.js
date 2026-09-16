@@ -22,6 +22,7 @@ const crdsRoutes = require('./crds.routes');
 const operatorsRoutes = require('./operators.routes');
 const customResourcesRoutes = require('./customResources.routes');
 const storageRoutes = require('./storage.routes');
+const rbacRoutes = require('./rbac.routes');
 
 const router = express.Router();
 
@@ -54,6 +55,7 @@ router.use('/operator', operatorsRoutes);
 router.use('/custom-resources', customResourcesRoutes);
 router.use('/custom-resource', customResourcesRoutes);
 router.use('/storage', storageRoutes);
+router.use('/rbac', rbacRoutes);
 router.use('/statefulsets', statefulSetsRoutes);
 router.use('/statefulset', statefulSetsRoutes);
 router.use('/daemonsets', daemonSetsRoutes);
