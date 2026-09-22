@@ -859,7 +859,50 @@ When `shell` is set to `auto`:
 - Execution seamlessly targets the cluster specified in the `?cluster=` query parameter.
 - The terminal modal dynamically queries the selected cluster's pod spec to populate available containers and their real-time running/waiting/terminated states.
 
-## 25. License
+## 26. Workloads Architecture: Jobs & CronJobs
+
+### 26.1 Subsystem Overview
+The Jobs & CronJobs subsystem provides complete, read-only batch execution and scheduling telemetry within the Workloads section:
+- **Jobs (`batch/v1`)**: Finite batch processing tasks with completion targets, parallelism limits, backoff retry budgets, running durations, and parent/child tracking.
+- **CronJobs (`batch/v1`)**: Periodic time-based job orchestrators tracking crontab schedule expressions, timezone configurations, suspension states, concurrency policies (`Allow`, `Forbid`, `Replace`), and recent execution history.
+
+### 26.2 Relational Hierarchy (CronJob → Job → Pod)
+1. **CronJob → Job Traversal**:
+   - Each Job created by a CronJob has `metadata.ownerReferences` pointing to the parent CronJob.
+   - When viewing a CronJob, recent triggered Jobs in that namespace are automatically correlated and surfaced with their active/succeeded/failed counts, start/completion times, and durations.
+2. **Job → Pod Traversal**:
+   - Each Pod spawned by a Job declares `metadata.ownerReferences` pointing to the Job and carries the label `job-name: <job-name>`.
+   - When inspecting a Job, associated Pods are retrieved in parallel and displayed with their live phase, node placement, restart counts, and container statuses.
+   - Clicking any Pod in the Job details drawer seamlessly transitions into the full-featured `PodDetail` view (including logs and interactive web terminal).
+
+### 26.3 Endpoints
+- `GET /api/jobs`: List Jobs across all namespaces or filtered via `?namespace=<ns>`.
+- `GET /api/jobs/:namespace/:name`: Detailed Job spec, status, computed duration, related Pods, and related events.
+- `GET /api/jobs/:namespace/:name/yaml`: Live raw Job YAML manifest.
+- `GET /api/cronjobs`: List CronJobs across all namespaces or filtered via `?namespace=<ns>`.
+- `GET /api/cronjobs/:namespace/:name`: Detailed CronJob spec, schedule policy, recent child Jobs, and related events.
+- `GET /api/cronjobs/:namespace/:name/yaml`: Live raw CronJob YAML manifest.
+
+Every endpoint fully honors the `?cluster=<clusterId>` query parameter for transparent multi-cluster inspection.
+
+### 26.4 Required RBAC Permissions
+The following read-only RBAC permissions are required on the target cluster:
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole # or Role
+metadata:
+  name: dashboard-workloads-reader
+rules:
+- apiGroups: ["batch"]
+  resources: ["jobs", "cronjobs"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["pods", "events"]
+  verbs: ["get", "list"]
+```
+
+## 27. License
 
 The project declares the MIT license in `package.json`.
+
 

@@ -24,6 +24,8 @@ const customResourcesRoutes = require('./customResources.routes');
 const storageRoutes = require('./storage.routes');
 const rbacRoutes = require('./rbac.routes');
 const metricsRoutes = require('./metrics.routes');
+const jobsRoutes = require('./jobs.routes');
+const cronJobsRoutes = require('./cronjobs.routes');
 
 const router = express.Router();
 
@@ -62,6 +64,10 @@ router.use('/statefulsets', statefulSetsRoutes);
 router.use('/statefulset', statefulSetsRoutes);
 router.use('/daemonsets', daemonSetsRoutes);
 router.use('/daemonset', daemonSetsRoutes);
+router.use('/jobs', jobsRoutes);
+router.use('/job', jobsRoutes);
+router.use('/cronjobs', cronJobsRoutes);
+router.use('/cronjob', cronJobsRoutes);
 router.use('/health', healthRoutes);
 router.use('/troubleshooting', troubleshootingRoutes);
 router.use('/resources', resourcesRoutes);

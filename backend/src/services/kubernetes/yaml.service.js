@@ -98,6 +98,38 @@ const SUPPORTED_RESOURCES = {
     fetch: (clients, { namespace, name }) =>
       clients.appsV1Api.readNamespacedDaemonSet({ name, namespace }),
   },
+  job: {
+    canonical: 'jobs',
+    namespaced: true,
+    apiVersion: 'batch/v1',
+    kind: 'Job',
+    fetch: (clients, { namespace, name }) =>
+      clients.batchV1Api.readNamespacedJob({ name, namespace }),
+  },
+  jobs: {
+    canonical: 'jobs',
+    namespaced: true,
+    apiVersion: 'batch/v1',
+    kind: 'Job',
+    fetch: (clients, { namespace, name }) =>
+      clients.batchV1Api.readNamespacedJob({ name, namespace }),
+  },
+  cronjob: {
+    canonical: 'cronjobs',
+    namespaced: true,
+    apiVersion: 'batch/v1',
+    kind: 'CronJob',
+    fetch: (clients, { namespace, name }) =>
+      clients.batchV1Api.readNamespacedCronJob({ name, namespace }),
+  },
+  cronjobs: {
+    canonical: 'cronjobs',
+    namespaced: true,
+    apiVersion: 'batch/v1',
+    kind: 'CronJob',
+    fetch: (clients, { namespace, name }) =>
+      clients.batchV1Api.readNamespacedCronJob({ name, namespace }),
+  },
   namespace: {
     canonical: 'namespaces',
     namespaced: false,

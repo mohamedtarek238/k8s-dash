@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowDown, Blocks, Box, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Copy, Cpu, Database,
+  Activity, AlertTriangle, ArrowDown, Blocks, Box, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Clock, Copy, Cpu, Database,
   ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, Menu, Moon, Network,
-  Package, PanelLeftClose, PanelLeftOpen, RefreshCw, Route, Search, Server, Settings2, Shield, Sun, Terminal,
+  Package, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Route, Search, Server, Settings2, Shield, Sun, Terminal,
   X, Zap
 } from 'lucide-react';
 
@@ -15,7 +15,7 @@ const nav = [
   { key: 'nodes', label: 'Nodes', icon: Server },
   { key: 'namespaces', label: 'Namespaces', icon: Layers3 },
   { key: 'pods', label: 'Pods', icon: Box },
-  { key: 'deployments', label: 'Deployments', icon: Package },
+  { key: 'workloads', label: 'Workloads', icon: Package },
   { key: 'services', label: 'Services', icon: Network },
   { key: 'ingresses', label: 'Ingress', icon: ExternalLink },
   { key: 'storage', label: 'Storage', icon: HardDrive },
@@ -505,6 +505,331 @@ function Pods({ onSelect }) { const [namespace, setNamespace] = useState(''); co
 
 function Deployments({ onSelect }) { const [namespace, setNamespace] = useState(''); const [search, setSearch] = useState(''); const resource = useResource(() => api.deployments(namespace), [namespace]); const rows = (resource.data?.data || []).filter((r) => `${r.name} ${r.namespace}`.toLowerCase().includes(search.toLowerCase())); return <><PageHeader eyebrow="Workloads" title="Deployments" description="Replica health and rollout state for applications across the cluster." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} /><Toolbar search={search} setSearch={setSearch} onRefresh={resource.reload}><input className="select" value={namespace} onChange={(e) => setNamespace(e.target.value)} placeholder="All namespaces" /></Toolbar>{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <Table rows={rows} onRow={onSelect} emptyTitle="No matching deployments" columns={[{ key: 'name', label: 'Deployment', render: (r) => <strong className="resource-name"><Package size={16} />{r.name}</strong> }, { key: 'namespace', label: 'Namespace' }, { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> }, { key: 'desiredReplicas', label: 'Desired' }, { key: 'availableReplicas', label: 'Available' }, { key: 'readyReplicas', label: 'Ready' }, { key: 'updatedReplicas', label: 'Updated' }, { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) }]} />}</>; }
 
+function WorkloadsView({
+  initialTab = 'deployments',
+  onSelectDeployment,
+  onSelectJob,
+  onSelectCronJob,
+  onSelectStatefulSet,
+  onSelectDaemonSet,
+}) {
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [namespace, setNamespace] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
+  const deploymentsResource = useResource(() => api.deployments(namespace), [namespace]);
+  const jobsResource = useResource(() => api.jobs(namespace), [namespace]);
+  const cronJobsResource = useResource(() => api.cronjobs(namespace), [namespace]);
+  const statefulSetsResource = useResource(() => api.statefulsets(namespace), [namespace]);
+  const daemonSetsResource = useResource(() => api.daemonsets(namespace), [namespace]);
+
+  const currentResource =
+    activeTab === 'jobs'
+      ? jobsResource
+      : activeTab === 'cronjobs'
+      ? cronJobsResource
+      : activeTab === 'statefulsets'
+      ? statefulSetsResource
+      : activeTab === 'daemonsets'
+      ? daemonSetsResource
+      : deploymentsResource;
+
+  const deploymentRows = (deploymentsResource.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const jobRows = (jobsResource.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const cronJobRows = (cronJobsResource.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace} ${r.schedule || ''}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const statefulSetRows = (statefulSetsResource.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const daemonSetRows = (daemonSetsResource.data?.data || []).filter((r) =>
+    `${r.name} ${r.namespace}`.toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Workloads"
+        title="Application Workloads"
+        description="Replica health, batch executions, schedules, and daemon services across your cluster."
+        action={
+          <button className="button subtle" onClick={currentResource.reload}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        }
+      />
+
+      <div className="metrics-grid">
+        <Metric
+          icon={Package}
+          label="Deployments"
+          value={deploymentsResource.data?.data?.length ?? 0}
+          detail="Deployment rollouts"
+          accent="blue"
+        />
+        <Metric
+          icon={Play}
+          label="Jobs"
+          value={jobsResource.data?.data?.length ?? 0}
+          detail="Batch execution tasks"
+          accent="teal"
+        />
+        <Metric
+          icon={Clock}
+          label="CronJobs"
+          value={cronJobsResource.data?.data?.length ?? 0}
+          detail="Scheduled periodic jobs"
+          accent="purple"
+        />
+        <Metric
+          icon={Database}
+          label="StatefulSets"
+          value={statefulSetsResource.data?.data?.length ?? 0}
+          detail="Stateful pod sets"
+          accent="amber"
+        />
+        <Metric
+          icon={Server}
+          label="DaemonSets"
+          value={daemonSetsResource.data?.data?.length ?? 0}
+          detail="Per-node background services"
+          accent="green"
+        />
+      </div>
+
+      <div className="sub-nav-tabs">
+        <button
+          className={`sub-nav-tab ${activeTab === 'deployments' ? 'active' : ''}`}
+          onClick={() => setActiveTab('deployments')}
+        >
+          <Package size={15} /> Deployments ({deploymentsResource.data?.data?.length ?? '—'})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'jobs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('jobs')}
+        >
+          <Play size={15} /> Jobs ({jobsResource.data?.data?.length ?? '—'})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'cronjobs' ? 'active' : ''}`}
+          onClick={() => setActiveTab('cronjobs')}
+        >
+          <Clock size={15} /> CronJobs ({cronJobsResource.data?.data?.length ?? '—'})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'statefulsets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('statefulsets')}
+        >
+          <Database size={15} /> StatefulSets ({statefulSetsResource.data?.data?.length ?? '—'})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'daemonsets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('daemonsets')}
+        >
+          <Server size={15} /> DaemonSets ({daemonSetsResource.data?.data?.length ?? '—'})
+        </button>
+      </div>
+
+      <Toolbar search={search} setSearch={setSearch} onRefresh={currentResource.reload}>
+        <input
+          className="select"
+          value={namespace}
+          onChange={(e) => setNamespace(e.target.value)}
+          placeholder="All namespaces"
+        />
+      </Toolbar>
+
+      {currentResource.loading ? (
+        <Loading />
+      ) : currentResource.error ? (
+        <ErrorState error={currentResource.error} reload={currentResource.reload} />
+      ) : activeTab === 'jobs' ? (
+        <Table
+          rows={jobRows}
+          onRow={onSelectJob}
+          emptyTitle="No matching jobs found"
+          columns={[
+            {
+              key: 'name',
+              label: 'Job',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Play size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            {
+              key: 'status',
+              label: 'Status',
+              render: (r) => (
+                <Badge
+                  tone={
+                    r.status === 'Succeeded'
+                      ? 'success'
+                      : r.status === 'Failed'
+                      ? 'danger'
+                      : r.status === 'Running'
+                      ? 'info'
+                      : 'warning'
+                  }
+                >
+                  {r.status}
+                </Badge>
+              ),
+            },
+            { key: 'active', label: 'Active', render: (r) => r.active ?? 0 },
+            { key: 'succeeded', label: 'Succeeded', render: (r) => r.succeeded ?? 0 },
+            { key: 'failed', label: 'Failed', render: (r) => r.failed ?? 0 },
+            {
+              key: 'completions',
+              label: 'Completions',
+              render: (r) => `${r.succeeded ?? 0}/${r.completions ?? 1}`,
+            },
+            { key: 'duration', label: 'Duration', render: (r) => r.duration || '—' },
+            { key: 'startTime', label: 'Start Time', render: (r) => formatDate(r.startTime) },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      ) : activeTab === 'cronjobs' ? (
+        <Table
+          rows={cronJobRows}
+          onRow={onSelectCronJob}
+          emptyTitle="No matching cronjobs found"
+          columns={[
+            {
+              key: 'name',
+              label: 'CronJob',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Clock size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            {
+              key: 'schedule',
+              label: 'Schedule',
+              render: (r) => (
+                <span className="mono" style={{ color: 'var(--teal)' }}>
+                  {r.schedule}
+                </span>
+              ),
+            },
+            {
+              key: 'suspend',
+              label: 'Suspended',
+              render: (r) => (
+                <Badge tone={r.suspend ? 'warning' : 'success'}>
+                  {r.suspend ? 'Suspended' : 'Active'}
+                </Badge>
+              ),
+            },
+            { key: 'activeJobsCount', label: 'Active Jobs', render: (r) => r.activeJobsCount ?? 0 },
+            {
+              key: 'lastScheduleTime',
+              label: 'Last Schedule',
+              render: (r) => formatDate(r.lastScheduleTime),
+            },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      ) : activeTab === 'statefulsets' ? (
+        <Table
+          rows={statefulSetRows}
+          onRow={onSelectStatefulSet}
+          emptyTitle="No matching statefulsets found"
+          columns={[
+            {
+              key: 'name',
+              label: 'StatefulSet',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Database size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> },
+            { key: 'desiredReplicas', label: 'Desired' },
+            { key: 'readyReplicas', label: 'Ready' },
+            { key: 'currentReplicas', label: 'Current' },
+            { key: 'updatedReplicas', label: 'Updated' },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      ) : activeTab === 'daemonsets' ? (
+        <Table
+          rows={daemonSetRows}
+          onRow={onSelectDaemonSet}
+          emptyTitle="No matching daemonsets found"
+          columns={[
+            {
+              key: 'name',
+              label: 'DaemonSet',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Server size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> },
+            { key: 'desiredNumberScheduled', label: 'Desired' },
+            { key: 'currentNumberScheduled', label: 'Current' },
+            { key: 'numberReady', label: 'Ready' },
+            { key: 'numberAvailable', label: 'Available' },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      ) : (
+        <Table
+          rows={deploymentRows}
+          onRow={onSelectDeployment}
+          emptyTitle="No matching deployments"
+          columns={[
+            {
+              key: 'name',
+              label: 'Deployment',
+              render: (r) => (
+                <strong className="resource-name">
+                  <Package size={16} />
+                  {r.name}
+                </strong>
+              ),
+            },
+            { key: 'namespace', label: 'Namespace' },
+            { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> },
+            { key: 'desiredReplicas', label: 'Desired' },
+            { key: 'availableReplicas', label: 'Available' },
+            { key: 'readyReplicas', label: 'Ready' },
+            { key: 'updatedReplicas', label: 'Updated' },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      )}
+    </>
+  );
+}
+
 function Services({ onSelect }) {
   const [namespace, setNamespace] = useState('');
   const [search, setSearch] = useState('');
@@ -935,6 +1260,286 @@ function PodDetail({ pod, onClose, dark }) {
 }
 
 function DeploymentDetail({ deployment, onClose }) { const detail = useResource(() => api.deployment(deployment.namespace, deployment.name), [deployment.namespace, deployment.name]); return <DetailPanel key={`deployment-${deployment.namespace}-${deployment.name}`} title={deployment.name} resourceType="deployments" namespace={deployment.namespace} name={deployment.name} onClose={onClose}>{detail.loading ? <Loading rows={3} /> : detail.error ? <ErrorState error={detail.error} reload={detail.reload} /> : <><Badge>{detail.data?.summary?.status || deployment.status}</Badge><KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Desired: detail.data?.summary?.desiredReplicas, Available: detail.data?.summary?.availableReplicas, Ready: detail.data?.summary?.readyReplicas, Updated: detail.data?.summary?.updatedReplicas, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} /><h3>Strategy</h3><pre className="json-block">{JSON.stringify(detail.data?.spec?.strategy || {}, null, 2)}</pre></>}</DetailPanel>; }
+
+function JobDetail({ job, onClose, onSelectPod }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const detail = useResource(() => api.job(job.namespace, job.name), [job.namespace, job.name]);
+  const data = detail.data || {};
+  const summary = data.summary || job;
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <span className="eyebrow">Workload / Job detail</span>
+        <h2>{job.name}</h2>
+        <div className="detail-tabs">
+          <button className={`detail-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+            Overview
+          </button>
+          <button className={`detail-tab ${activeTab === 'pods' ? 'active' : ''}`} onClick={() => setActiveTab('pods')}>
+            <Box size={14} /> Pods ({data.pods?.length ?? '—'})
+          </button>
+          <button className={`detail-tab ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>
+            <Activity size={14} /> Events ({data.events?.length ?? '—'})
+          </button>
+          <button className={`detail-tab ${activeTab === 'yaml' ? 'active' : ''}`} onClick={() => setActiveTab('yaml')}>
+            <FileCode size={14} /> YAML
+          </button>
+        </div>
+
+        {detail.loading ? (
+          <Loading rows={4} />
+        ) : detail.error ? (
+          <ErrorState error={detail.error} reload={detail.reload} />
+        ) : activeTab === 'yaml' ? (
+          <YamlViewer resourceType="jobs" namespace={job.namespace} name={job.name} />
+        ) : activeTab === 'events' ? (
+          <div style={{ marginTop: '14px' }}>
+            <h3>Related events</h3>
+            <EventTable events={data.events || []} />
+          </div>
+        ) : activeTab === 'pods' ? (
+          <div style={{ marginTop: '14px' }}>
+            <h3>Related Pods ({data.pods?.length || 0})</h3>
+            {(!data.pods || data.pods.length === 0) ? (
+              <div className="empty-state">No pods currently associated with this job.</div>
+            ) : (
+              <Table
+                rows={data.pods}
+                onRow={(pod) => onSelectPod && onSelectPod(pod)}
+                emptyTitle="No pods found"
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Pod',
+                    render: (r) => (
+                      <strong className="resource-name" style={{ cursor: 'pointer', color: 'var(--teal)' }}>
+                        <Box size={15} /> {r.name}
+                      </strong>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    render: (r) => (
+                      <Badge tone={r.status === 'Succeeded' ? 'success' : r.status === 'Running' ? 'info' : r.status === 'Failed' ? 'danger' : 'warning'}>
+                        {r.status}
+                      </Badge>
+                    ),
+                  },
+                  { key: 'nodeName', label: 'Node', render: (r) => r.nodeName || '—' },
+                  { key: 'restartCount', label: 'Restarts', render: (r) => r.restartCount ?? 0 },
+                  { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+                ]}
+              />
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '10px 0' }}>
+              <Badge tone={summary.status === 'Succeeded' ? 'success' : summary.status === 'Failed' ? 'danger' : summary.status === 'Running' ? 'info' : 'warning'}>
+                {summary.status}
+              </Badge>
+              {summary.duration && <Badge tone="neutral">Duration: {summary.duration}</Badge>}
+            </div>
+
+            <KeyValues
+              values={{
+                Namespace: summary.namespace,
+                Completions: `${summary.succeeded ?? 0} / ${summary.completions ?? 1}`,
+                Parallelism: summary.parallelism,
+                Active: summary.active ?? 0,
+                Failed: summary.failed ?? 0,
+                'Backoff Limit': summary.backoffLimit,
+                'Start Time': formatDate(summary.startTime),
+                'Completion Time': formatDate(summary.completionTime),
+                Duration: summary.duration || '—',
+                Created: formatDate(summary.creationTimestamp),
+              }}
+            />
+
+            {data.metadata?.ownerReferences && data.metadata.ownerReferences.length > 0 && (
+              <>
+                <h3>Owner References</h3>
+                <div className="mini-list">
+                  {data.metadata.ownerReferences.map((owner, idx) => (
+                    <div key={idx}>
+                      <strong>{owner.kind}: {owner.name}</strong>
+                      <span>UID: {owner.uid}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {Object.keys(data.metadata?.labels || {}).length > 0 && (
+              <>
+                <h3>Labels</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '6px 0 14px' }}>
+                  {Object.entries(data.metadata.labels).map(([k, v]) => (
+                    <span key={k} className="anno-tag">{k}={v}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function CronJobDetail({ cronJob, onClose, onSelectJob }) {
+  const [activeTab, setActiveTab] = useState('overview');
+  const detail = useResource(() => api.cronjob(cronJob.namespace, cronJob.name), [cronJob.namespace, cronJob.name]);
+  const data = detail.data || {};
+  const summary = data.summary || cronJob;
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <span className="eyebrow">Workload / CronJob detail</span>
+        <h2>{cronJob.name}</h2>
+        <div className="detail-tabs">
+          <button className={`detail-tab ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+            Overview
+          </button>
+          <button className={`detail-tab ${activeTab === 'jobs' ? 'active' : ''}`} onClick={() => setActiveTab('jobs')}>
+            <Play size={14} /> Recent Jobs ({data.jobs?.length ?? '—'})
+          </button>
+          <button className={`detail-tab ${activeTab === 'events' ? 'active' : ''}`} onClick={() => setActiveTab('events')}>
+            <Activity size={14} /> Events ({data.events?.length ?? '—'})
+          </button>
+          <button className={`detail-tab ${activeTab === 'yaml' ? 'active' : ''}`} onClick={() => setActiveTab('yaml')}>
+            <FileCode size={14} /> YAML
+          </button>
+        </div>
+
+        {detail.loading ? (
+          <Loading rows={4} />
+        ) : detail.error ? (
+          <ErrorState error={detail.error} reload={detail.reload} />
+        ) : activeTab === 'yaml' ? (
+          <YamlViewer resourceType="cronjobs" namespace={cronJob.namespace} name={cronJob.name} />
+        ) : activeTab === 'events' ? (
+          <div style={{ marginTop: '14px' }}>
+            <h3>Related events</h3>
+            <EventTable events={data.events || []} />
+          </div>
+        ) : activeTab === 'jobs' ? (
+          <div style={{ marginTop: '14px' }}>
+            <h3>Recent Executed Jobs ({data.jobs?.length || 0})</h3>
+            {(!data.jobs || data.jobs.length === 0) ? (
+              <div className="empty-state">No jobs have been triggered by this CronJob yet.</div>
+            ) : (
+              <Table
+                rows={data.jobs}
+                onRow={(job) => onSelectJob && onSelectJob(job)}
+                emptyTitle="No jobs found"
+                columns={[
+                  {
+                    key: 'name',
+                    label: 'Job Name',
+                    render: (r) => (
+                      <strong className="resource-name" style={{ cursor: 'pointer', color: 'var(--teal)' }}>
+                        <Play size={15} /> {r.name}
+                      </strong>
+                    ),
+                  },
+                  {
+                    key: 'status',
+                    label: 'Status',
+                    render: (r) => (
+                      <Badge tone={r.status === 'Succeeded' ? 'success' : r.status === 'Failed' ? 'danger' : r.status === 'Running' ? 'info' : 'warning'}>
+                        {r.status}
+                      </Badge>
+                    ),
+                  },
+                  { key: 'duration', label: 'Duration', render: (r) => r.duration || '—' },
+                  { key: 'startTime', label: 'Started', render: (r) => formatDate(r.startTime) },
+                  { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+                ]}
+              />
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', margin: '10px 0' }}>
+              <Badge tone={summary.suspend ? 'warning' : 'success'}>
+                {summary.status}
+              </Badge>
+              <Badge tone="info">Schedule: {summary.schedule}</Badge>
+            </div>
+
+            <KeyValues
+              values={{
+                Namespace: summary.namespace,
+                Schedule: summary.schedule,
+                'Time Zone': summary.timeZone || 'Cluster local',
+                Suspended: summary.suspend ? 'Yes' : 'No',
+                'Concurrency Policy': summary.concurrencyPolicy,
+                'Active Jobs': summary.activeJobsCount,
+                'Last Schedule Time': formatDate(summary.lastScheduleTime),
+                'Last Successful Time': formatDate(summary.lastSuccessfulTime),
+                Created: formatDate(summary.creationTimestamp),
+              }}
+            />
+
+            <h3>Execution Policy</h3>
+            <KeyValues
+              values={{
+                'Starting Deadline': data.spec?.startingDeadlineSeconds ? `${data.spec.startingDeadlineSeconds}s` : 'Not configured',
+                'Successful Jobs History Limit': data.spec?.successfulJobsHistoryLimit ?? 3,
+                'Failed Jobs History Limit': data.spec?.failedJobsHistoryLimit ?? 1,
+              }}
+            />
+
+            {Object.keys(data.metadata?.labels || {}).length > 0 && (
+              <>
+                <h3>Labels</h3>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', margin: '6px 0 14px' }}>
+                  {Object.entries(data.metadata.labels).map(([k, v]) => (
+                    <span key={k} className="anno-tag">{k}={v}</span>
+                  ))}
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function StatefulSetDetail({ statefulSet, onClose }) {
+  const detail = useResource(() => api.statefulset(statefulSet.namespace, statefulSet.name), [statefulSet.namespace, statefulSet.name]);
+  return (
+    <DetailPanel key={`ss-${statefulSet.namespace}-${statefulSet.name}`} title={statefulSet.name} resourceType="statefulsets" namespace={statefulSet.namespace} name={statefulSet.name} onClose={onClose}>
+      {detail.loading ? <Loading rows={3} /> : detail.error ? <ErrorState error={detail.error} reload={detail.reload} /> : (
+        <>
+          <Badge>{detail.data?.summary?.status || statefulSet.status}</Badge>
+          <KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Desired: detail.data?.summary?.desiredReplicas, Ready: detail.data?.summary?.readyReplicas, Current: detail.data?.summary?.currentReplicas, Updated: detail.data?.summary?.updatedReplicas, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} />
+        </>
+      )}
+    </DetailPanel>
+  );
+}
+
+function DaemonSetDetail({ daemonSet, onClose }) {
+  const detail = useResource(() => api.daemonset(daemonSet.namespace, daemonSet.name), [daemonSet.namespace, daemonSet.name]);
+  return (
+    <DetailPanel key={`ds-${daemonSet.namespace}-${daemonSet.name}`} title={daemonSet.name} resourceType="daemonsets" namespace={daemonSet.namespace} name={daemonSet.name} onClose={onClose}>
+      {detail.loading ? <Loading rows={3} /> : detail.error ? <ErrorState error={detail.error} reload={detail.reload} /> : (
+        <>
+          <Badge>{detail.data?.summary?.status || daemonSet.status}</Badge>
+          <KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Desired: detail.data?.summary?.desiredNumberScheduled, Current: detail.data?.summary?.currentNumberScheduled, Ready: detail.data?.summary?.numberReady, Available: detail.data?.summary?.numberAvailable, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} />
+        </>
+      )}
+    </DetailPanel>
+  );
+}
 
 function ServiceDetail({ service, onClose }) {
   const detail = useResource(() => api.service(service.namespace, service.name), [service.namespace, service.name]);
@@ -4779,7 +5384,19 @@ function App() {
   const isNodes = page === 'nodes' || page === 'node';
   const isNamespaces = page === 'namespaces' || page === 'namespace';
   const isPods = page === 'pods' || page === 'pod';
-  const isDeployments = page === 'deployments' || page === 'deployment';
+  const isWorkloads =
+    page === 'workloads' ||
+    page === 'workload' ||
+    page === 'deployments' ||
+    page === 'deployment' ||
+    page === 'jobs' ||
+    page === 'job' ||
+    page === 'cronjobs' ||
+    page === 'cronjob' ||
+    page === 'statefulsets' ||
+    page === 'statefulset' ||
+    page === 'daemonsets' ||
+    page === 'daemonset';
   const isServices = page === 'services' || page === 'service';
   const isIngress = page === 'ingresses' || page === 'ingress';
   const isStorage = page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot';
@@ -4804,8 +5421,8 @@ function App() {
     ? 'Services'
     : isPods
     ? 'Pods'
-    : isDeployments
-    ? 'Deployments'
+    : isWorkloads
+    ? 'Workloads'
     : isNodes
     ? 'Nodes'
     : isNamespaces
@@ -4842,8 +5459,26 @@ function App() {
     ? <Namespaces key={currentCluster} onSelect={(namespace) => setSelected({ type: 'namespace', value: namespace })} />
     : isPods
     ? <Pods key={currentCluster} onSelect={(pod) => setSelected({ type: 'pod', value: pod })} />
-    : isDeployments
-    ? <Deployments key={currentCluster} onSelect={(deployment) => setSelected({ type: 'deployment', value: deployment })} />
+    : isWorkloads
+    ? <WorkloadsView
+        key={currentCluster}
+        initialTab={
+          page === 'jobs' || page === 'job'
+            ? 'jobs'
+            : page === 'cronjobs' || page === 'cronjob'
+            ? 'cronjobs'
+            : page === 'statefulsets' || page === 'statefulset'
+            ? 'statefulsets'
+            : page === 'daemonsets' || page === 'daemonset'
+            ? 'daemonsets'
+            : 'deployments'
+        }
+        onSelectDeployment={(deployment) => setSelected({ type: 'deployment', value: deployment })}
+        onSelectJob={(job) => setSelected({ type: 'job', value: job })}
+        onSelectCronJob={(cronJob) => setSelected({ type: 'cronjob', value: cronJob })}
+        onSelectStatefulSet={(statefulSet) => setSelected({ type: 'statefulset', value: statefulSet })}
+        onSelectDaemonSet={(daemonSet) => setSelected({ type: 'daemonset', value: daemonSet })}
+      />
     : isServices
     ? <Services key={currentCluster} onSelect={(service) => setSelected({ type: 'service', value: service })} />
     : isIngress
@@ -4855,7 +5490,7 @@ function App() {
     if (key === 'nodes' && (page === 'nodes' || page === 'node')) return true;
     if (key === 'namespaces' && (page === 'namespaces' || page === 'namespace')) return true;
     if (key === 'pods' && (page === 'pods' || page === 'pod')) return true;
-    if (key === 'deployments' && (page === 'deployments' || page === 'deployment')) return true;
+    if ((key === 'workloads' || key === 'deployments') && isWorkloads) return true;
     if (key === 'services' && (page === 'services' || page === 'service')) return true;
     if (key === 'ingresses' && (page === 'ingresses' || page === 'ingress')) return true;
     if (key === 'storage' && (page === 'storage' || page === 'pv' || page === 'pvc' || page === 'storageclass' || page === 'storageclasses' || page === 'csidriver' || page === 'csidrivers' || page === 'volumesnapshots' || page === 'volumesnapshot')) return true;
@@ -4930,6 +5565,32 @@ function App() {
       {selected?.type === 'namespace' && <NamespaceDetail namespace={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'pod' && <PodDetail pod={selected.value} onClose={() => setSelected(null)} dark={dark} />}
       {selected?.type === 'deployment' && <DeploymentDetail deployment={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'job' && (
+        <JobDetail
+          job={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectPod={(pod) => setSelected({ type: 'pod', value: pod })}
+        />
+      )}
+      {selected?.type === 'cronjob' && (
+        <CronJobDetail
+          cronJob={selected.value}
+          onClose={() => setSelected(null)}
+          onSelectJob={(job) => setSelected({ type: 'job', value: job })}
+        />
+      )}
+      {selected?.type === 'statefulset' && (
+        <StatefulSetDetail
+          statefulSet={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
+      {selected?.type === 'daemonset' && (
+        <DaemonSetDetail
+          daemonSet={selected.value}
+          onClose={() => setSelected(null)}
+        />
+      )}
       {selected?.type === 'service' && <ServiceDetail service={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'httproute' && <HttpRouteDetail route={selected.value} onClose={() => setSelected(null)} />}
