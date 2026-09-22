@@ -808,7 +808,58 @@ The Advanced RBAC Analysis feature resolves complex multi-hop Kubernetes authori
 6. **Configuration Indicators**: Factually surfaces Kubernetes configuration patterns (wildcard `*` API groups, resources, verbs, `cluster-admin` bindings, non-resource URLs, SA bindings, User/Group bindings) without arbitrary risk scores or rankings.
 7. **Relationship Graph**: Interactive visual flow connecting `Subject` -> `Binding` -> `Role` -> `Rules`.
 
-## 24. License
+## 24. Pod Web Terminal & Interactive Exec Architecture
+
+### 24.1 Overview & Architecture
+The Pod Web Terminal provides safe, interactive command-line access to containers inside Kubernetes pods directly from the Pod Details view:
+- **Zero Redesign**: Embedded cleanly into the existing `PodDetail` component via an action button that opens a full-featured terminal modal powered by `xterm.js` and `FitAddon`.
+- **WebSocket Gateway**: The Express HTTP server intercepts upgrade requests on `/api/pods/:namespace/:podName/exec`, delegating connection lifecycle to `WebSocketServer` (`ws`).
+- **Kubernetes Client Node Integration**: Streams I/O through `@kubernetes/client-node`'s `k8s.Exec` (`Exec.exec`) using SPDY / WebSocket multiplexed channels.
+
+### 24.2 WebSocket Protocol & Parameters
+- **Endpoint**: `ws://<host>:<port>/api/pods/:namespace/:podName/exec` (or `wss://`)
+- **Query Parameters**:
+  - `cluster`: Target cluster identifier from multi-cluster manager (default: default cluster context).
+  - `container`: Specific container name within the Pod (validates container is in `Running` state).
+  - `shell`: Target shell binary (`auto`, `/bin/bash`, `/bin/sh`). Default is `auto`.
+  - `cols` & `rows`: Initial terminal geometry for pseudo-terminal (PTY) allocation.
+- **Client Messages**:
+  - Raw string/binary: Keystrokes forwarded directly to container `stdin`.
+  - JSON Control frames:
+    - `{ "type": "resize", "cols": number, "rows": number }`: Resizes the remote PTY dynamically via native terminal resize queues.
+    - `{ "type": "ping" }`: Heartbeat keeping the connection alive.
+- **Server Messages**:
+  - Raw stdout/stderr chunks: Forwarded directly to `xterm.js` terminal buffer.
+  - JSON Control frames:
+    - `{ "type": "status", "status": "connected" }`: Initial handshake acknowledgment.
+    - `{ "type": "exit", "code": number }`: Clean shell exit notification.
+    - `{ "type": "error", "message": string }`: Terminal execution errors or container state warnings.
+
+### 24.3 Shell Fallback Strategy
+When `shell` is set to `auto`:
+1. Attempts to spawn `/bin/bash`.
+2. Detects early startup failures or missing binary signals.
+3. Automatically falls back to `/bin/sh` to support minimal and alpine-based container images without breaking user interaction.
+
+### 24.4 Security, RBAC & Logging Guarantees
+- **Authoritative Kubernetes RBAC**: Execution rights are strictly enforced by the Kubernetes API server. To establish an exec session, the user's active context must have:
+  ```yaml
+  apiVersion: rbac.authorization.k8s.io/v1
+  kind: Role # or ClusterRole
+  rules:
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  ```
+- **Permission Denied Handling**: If `403 Forbidden` is returned, a human-readable RBAC error is returned explaining that `pods/exec` `create` permission is missing.
+- **Zero Keystroke / Output Logging**: Keystrokes, commands entered, and stdout/stderr stream data are never written to log files, console, or persistent storage. Only high-level connection lifecycle events (connection opened, closed, error encountered, pod/container metadata) are logged.
+- **Idempotent Resource Teardown**: Closing the browser tab or modal immediately terminates both the WebSocket connection and the underlying Kubernetes streaming exec connection, releasing remote PTY and process handles.
+
+### 24.5 Multi-Cluster Compatibility
+- Execution seamlessly targets the cluster specified in the `?cluster=` query parameter.
+- The terminal modal dynamically queries the selected cluster's pod spec to populate available containers and their real-time running/waiting/terminated states.
+
+## 25. License
 
 The project declares the MIT license in `package.json`.
 

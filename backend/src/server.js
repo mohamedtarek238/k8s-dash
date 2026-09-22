@@ -1,11 +1,12 @@
 const { createApp } = require('./app');
 const { getCurrentContext, getClusterServer, listClusters, getDefaultClusterId } = require('./config/kubernetes');
+const { setupTerminalWebSocket } = require('./websocket/terminal.handler');
 
 const PORT = process.env.PORT || 5000;
 
 const app = createApp();
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   const clusters = listClusters();
   const defaultId = getDefaultClusterId();
 
@@ -17,3 +18,5 @@ app.listen(PORT, () => {
   });
   console.log(`Health check: http://localhost:${PORT}/api/status`);
 });
+
+setupTerminalWebSocket(server);

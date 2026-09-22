@@ -8,6 +8,7 @@ import {
 
 import { api } from './api';
 import { formatMemoryQuantity, formatStorageQuantity, formatCpuQuantity } from './formatters';
+import { PodTerminal } from './components/PodTerminal';
 
 const nav = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -859,9 +860,10 @@ function NodeDetail({ node, onClose }) { return <DetailPanel key={`node-${node.n
 
 function NamespaceDetail({ namespace, onClose }) { return <DetailPanel key={`namespace-${namespace.name}`} title={namespace.name} resourceType="namespaces" name={namespace.name} onClose={onClose}><Badge>{namespace.status}</Badge><KeyValues values={{ Status: namespace.status, Created: formatDate(namespace.creationTimestamp), Labels: Object.keys(namespace.labels || {}).length }} /><div className="unsupported"><Layers3 size={17} /><span>Per-namespace pod, deployment, service, quota, CPU, and memory totals are not exposed by the backend.</span></div></DetailPanel>; }
 
-function PodDetail({ pod, onClose }) {
+function PodDetail({ pod, onClose, dark }) {
   const detail = useResource(() => api.pod(pod.namespace, pod.name), [pod.namespace, pod.name]);
   const [showLogs, setShowLogs] = useState(false);
+  const [showTerminal, setShowTerminal] = useState(false);
   return (
     <DetailPanel key={`pod-${pod.namespace}-${pod.name}`} title={pod.name} resourceType="pods" namespace={pod.namespace} name={pod.name} onClose={onClose}>
       {detail.loading ? (
@@ -873,7 +875,12 @@ function PodDetail({ pod, onClose }) {
           <Badge>{detail.data?.status?.phase || pod.status}</Badge>
           <KeyValues values={{ Namespace: detail.data?.metadata?.namespace, Node: detail.data?.node, IP: detail.data?.ip, Restarts: detail.data?.restartCount, ServiceAccount: detail.data?.spec?.serviceAccountName, Created: formatDate(detail.data?.metadata?.creationTimestamp) }} />
           <div className="detail-actions">
-            <button className="button primary" onClick={() => setShowLogs(true)}><Terminal size={16} /> View logs</button>
+            <button className="button primary" onClick={() => setShowTerminal(true)}>
+              <Terminal size={16} /> Terminal
+            </button>
+            <button className="button subtle" onClick={() => setShowLogs(true)}>
+              <FileText size={16} /> View logs
+            </button>
           </div>
           <h3>Containers</h3>
           <div className="mini-list">
@@ -915,6 +922,14 @@ function PodDetail({ pod, onClose }) {
         </>
       )}
       {showLogs && <Logs pod={pod} onClose={() => setShowLogs(false)} />}
+      {showTerminal && (
+        <PodTerminal
+          pod={pod}
+          podDetail={detail.data}
+          onClose={() => setShowTerminal(false)}
+          dark={dark}
+        />
+      )}
     </DetailPanel>
   );
 }
@@ -4913,7 +4928,7 @@ function App() {
       </main>
       {selected?.type === 'node' && <NodeDetail node={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'namespace' && <NamespaceDetail namespace={selected.value} onClose={() => setSelected(null)} />}
-      {selected?.type === 'pod' && <PodDetail pod={selected.value} onClose={() => setSelected(null)} />}
+      {selected?.type === 'pod' && <PodDetail pod={selected.value} onClose={() => setSelected(null)} dark={dark} />}
       {selected?.type === 'deployment' && <DeploymentDetail deployment={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'service' && <ServiceDetail service={selected.value} onClose={() => setSelected(null)} />}
       {selected?.type === 'ingress' && <IngressDetail ingress={selected.value} onClose={() => setSelected(null)} />}
