@@ -226,7 +226,15 @@ async function listHttpRoutes(namespace, clients) {
   }
 }
 
-async function getHttpRouteDetails(namespace, name, { resolvePods = true, includeEvents = true } = {}, clients) {
+async function getHttpRouteDetails(namespace, name, optsOrClients, maybeClients) {
+  let opts = { resolvePods: true, includeEvents: true };
+  let clients = maybeClients;
+  if (optsOrClients && (optsOrClients.customObjectsApi || optsOrClients.coreV1Api)) {
+    clients = optsOrClients;
+  } else if (optsOrClients) {
+    opts = { ...opts, ...optsOrClients };
+  }
+  const { resolvePods = true, includeEvents = true } = opts;
   const { customObjectsApi } = clients;
   const ingressClassMap = await getIngressClassControllerMap(clients);
 

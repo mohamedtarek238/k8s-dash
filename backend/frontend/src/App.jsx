@@ -353,11 +353,42 @@ function Ingresses({ onSelect }) {
         title="Ingress & Kong Gateway"
         description="HTTP routing entry points, Kong API Gateway routes, hosts, paths, and backend services."
         action={
-          <button className="button subtle" onClick={currentResource.reload}>
+          <button className="button subtle" onClick={() => { httpRoutesResource.reload(); ingressesResource.reload(); gatewaysResource.reload(); }}>
             <RefreshCw size={16} /> Refresh
           </button>
         }
       />
+
+      <div className="metrics-grid">
+        <Metric
+          icon={Route}
+          label="Kong HTTPRoutes"
+          value={httpRoutesResource.data?.data?.length ?? 0}
+          detail={`${(httpRoutesResource.data?.data || []).filter((r) => r.controller?.detected || r.kong?.hasKongAnnotations).length} Kong managed`}
+          accent="teal"
+        />
+        <Metric
+          icon={ExternalLink}
+          label="Standard Ingresses"
+          value={ingressesResource.data?.data?.length ?? 0}
+          detail="Classic Ingress rules"
+          accent="blue"
+        />
+        <Metric
+          icon={Zap}
+          label="Gateways"
+          value={gatewaysResource.data?.data?.length ?? 0}
+          detail="Gateway API instances"
+          accent="amber"
+        />
+        <Metric
+          icon={Shield}
+          label="Kong Plugins"
+          value={new Set((httpRoutesResource.data?.data || []).flatMap((r) => r.kong?.plugins || [])).size}
+          detail="Active attached plugins"
+          accent="purple"
+        />
+      </div>
 
       <div className="sub-nav-tabs">
         <button
