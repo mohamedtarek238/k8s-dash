@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { api } from './api';
-import { formatMemoryQuantity, formatStorageQuantity } from './formatters';
+import { formatMemoryQuantity, formatStorageQuantity, formatCpuQuantity } from './formatters';
 
 const nav = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -151,13 +151,16 @@ function Overview({ currentCluster }) {
   const cluster = useResource(api.cluster, [currentCluster]);
   const health = useResource(api.health, [currentCluster]);
   const events = useResource(api.events, [currentCluster]);
+  const metrics = useResource(api.metricsOverview, [currentCluster]);
   const reload = () => {
     cluster.reload();
     health.reload();
     events.reload();
+    metrics.reload();
   };
   const loading = cluster.loading;
   const c = cluster?.data;
+  const m = metrics?.data;
   const recentEvents = (events?.data?.data || []).slice(0, 6);
   const issues = health?.data?.issues || [];
 
@@ -209,6 +212,91 @@ function Overview({ currentCluster }) {
               accent="coral"
             />
           </div>
+
+          <div className="resource-cards-grid">
+            <div className="resource-usage-card">
+              <div className="resource-card-header">
+                <div className="resource-card-title">
+                  <div className="resource-card-icon cpu">
+                    <Cpu size={18} />
+                  </div>
+                  <h3>Cluster CPU usage</h3>
+                </div>
+                {m?.available ? (
+                  <Badge tone={m.cluster?.cpu?.usagePercentage > 85 ? 'danger' : m.cluster?.cpu?.usagePercentage > 70 ? 'warning' : 'blue'}>
+                    {m.cluster?.cpu?.usagePercentage ?? 0}%
+                  </Badge>
+                ) : (
+                  <Badge tone="warning">Unavailable</Badge>
+                )}
+              </div>
+              {m?.available ? (
+                <>
+                  <div className="resource-card-stats">
+                    <span className="resource-card-value">{m.cluster?.cpu?.usageFormatted || '0m'}</span>
+                    <span className="resource-card-pct">{m.cluster?.cpu?.usagePercentage ?? 0}% allocated</span>
+                  </div>
+                  <div className="resource-bar-track">
+                    <div
+                      className={`resource-bar-fill ${m.cluster?.cpu?.usagePercentage > 85 ? 'critical' : m.cluster?.cpu?.usagePercentage > 70 ? 'high' : 'cpu'}`}
+                      style={{ width: `${Math.min(100, m.cluster?.cpu?.usagePercentage ?? 0)}%` }}
+                    />
+                  </div>
+                  <div className="resource-card-details">
+                    <span>Allocatable: <strong>{m.cluster?.cpu?.allocatableFormatted || '—'}</strong></span>
+                    <span>Capacity: <strong>{m.cluster?.cpu?.capacityFormatted || '—'}</strong></span>
+                  </div>
+                </>
+              ) : (
+                <div className="unsupported" style={{ marginTop: 0 }}>
+                  <Gauge size={16} />
+                  <span>Live metrics unavailable</span>
+                </div>
+              )}
+            </div>
+
+            <div className="resource-usage-card">
+              <div className="resource-card-header">
+                <div className="resource-card-title">
+                  <div className="resource-card-icon memory">
+                    <HardDrive size={18} />
+                  </div>
+                  <h3>Cluster memory usage</h3>
+                </div>
+                {m?.available ? (
+                  <Badge tone={m.cluster?.memory?.usagePercentage > 85 ? 'danger' : m.cluster?.memory?.usagePercentage > 70 ? 'warning' : 'purple'}>
+                    {m.cluster?.memory?.usagePercentage ?? 0}%
+                  </Badge>
+                ) : (
+                  <Badge tone="warning">Unavailable</Badge>
+                )}
+              </div>
+              {m?.available ? (
+                <>
+                  <div className="resource-card-stats">
+                    <span className="resource-card-value">{m.cluster?.memory?.usageFormatted || '0 GiB'}</span>
+                    <span className="resource-card-pct">{m.cluster?.memory?.usagePercentage ?? 0}% allocated</span>
+                  </div>
+                  <div className="resource-bar-track">
+                    <div
+                      className={`resource-bar-fill ${m.cluster?.memory?.usagePercentage > 85 ? 'critical' : m.cluster?.memory?.usagePercentage > 70 ? 'high' : 'memory'}`}
+                      style={{ width: `${Math.min(100, m.cluster?.memory?.usagePercentage ?? 0)}%` }}
+                    />
+                  </div>
+                  <div className="resource-card-details">
+                    <span>Allocatable: <strong>{m.cluster?.memory?.allocatableFormatted || '—'}</strong></span>
+                    <span>Capacity: <strong>{m.cluster?.memory?.capacityFormatted || '—'}</strong></span>
+                  </div>
+                </>
+              ) : (
+                <div className="unsupported" style={{ marginTop: 0 }}>
+                  <Gauge size={16} />
+                  <span>Live metrics unavailable</span>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="split-grid">
             <section className="panel">
               <div className="panel-head">
@@ -224,10 +312,17 @@ function Overview({ currentCluster }) {
                 <div><span>Server</span><strong>{display(c?.server)}</strong></div>
                 <div><span>Kubernetes</span><strong>{display(c?.version?.gitVersion || c?.version?.major)}</strong></div>
               </div>
-              <div className="unsupported">
-                <Gauge size={17} />
-                <span>Live CPU and memory usage are not exposed by the backend. Capacity and allocatable values are available on the Nodes page.</span>
-              </div>
+              {m?.available ? (
+                <div className="telemetry-live-status">
+                  <Activity size={16} />
+                  <span>Metrics Server active · Live cluster and node telemetry streaming</span>
+                </div>
+              ) : (
+                <div className="unsupported">
+                  <Gauge size={17} />
+                  <span>Live metrics unavailable. Capacity and allocatable values are available on the Nodes page.</span>
+                </div>
+              )}
             </section>
             <section className="panel">
               <div className="panel-head">
@@ -256,6 +351,64 @@ function Overview({ currentCluster }) {
               )}
             </section>
           </div>
+
+          {m?.available && m?.nodes?.length > 0 && (
+            <section className="panel">
+              <div className="panel-head">
+                <div>
+                  <span className="eyebrow">Infrastructure telemetry</span>
+                  <h2>Node resource utilization</h2>
+                </div>
+                <span className="muted">{m.nodes.length} node{m.nodes.length === 1 ? '' : 's'} reporting</span>
+              </div>
+              <Table
+                rows={m.nodes}
+                emptyTitle="No node metrics available"
+                columns={[
+                  { key: 'name', label: 'Node', render: (r) => <strong className="resource-name"><Server size={16} />{r.name}</strong> },
+                  {
+                    key: 'cpu',
+                    label: 'CPU usage / allocatable',
+                    render: (r) => (
+                      <div className="mini-usage-cell">
+                        <div className="mini-usage-info">
+                          <span className="mono">{r.cpu?.usageFormatted} / {r.cpu?.allocatableFormatted}</span>
+                          <span className="pct">{r.cpu?.usagePercentage}%</span>
+                        </div>
+                        <div className="mini-progress-track">
+                          <div
+                            className={`mini-progress-fill ${r.cpu?.usagePercentage > 85 ? 'critical' : r.cpu?.usagePercentage > 70 ? 'high' : 'cpu'}`}
+                            style={{ width: `${Math.min(100, r.cpu?.usagePercentage || 0)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    key: 'memory',
+                    label: 'Memory usage / allocatable',
+                    render: (r) => (
+                      <div className="mini-usage-cell">
+                        <div className="mini-usage-info">
+                          <span className="mono">{r.memory?.usageFormatted} / {r.memory?.allocatableFormatted}</span>
+                          <span className="pct">{r.memory?.usagePercentage}%</span>
+                        </div>
+                        <div className="mini-progress-track">
+                          <div
+                            className={`mini-progress-fill ${r.memory?.usagePercentage > 85 ? 'critical' : r.memory?.usagePercentage > 70 ? 'high' : 'memory'}`}
+                            style={{ width: `${Math.min(100, r.memory?.usagePercentage || 0)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ),
+                  },
+                  { key: 'cpuCapacity', label: 'CPU capacity', render: (r) => <span className="mono">{r.cpu?.capacityFormatted || '—'}</span> },
+                  { key: 'memoryCapacity', label: 'Memory capacity', render: (r) => <span className="mono">{r.memory?.capacityFormatted || '—'}</span> },
+                ]}
+              />
+            </section>
+          )}
+
           <section className="panel">
             <div className="panel-head">
               <div>
@@ -274,7 +427,76 @@ function Overview({ currentCluster }) {
 
 function EventTable({ events }) { return <Table rows={events} emptyTitle="No recent events" columns={[{ key: 'type', label: 'Type', render: (r) => <Badge tone={r.type === 'Warning' ? 'warning' : 'info'}>{r.type || 'Normal'}</Badge> }, { key: 'reason', label: 'Reason' }, { key: 'involvedObject', label: 'Object', render: (r) => <span className="mono">{r.involvedObject?.display || '—'}</span> }, { key: 'message', label: 'Message', render: (r) => <span className="truncate">{r.message}</span> }, { key: 'lastTimestamp', label: 'Last seen', render: (r) => formatDate(r.lastTimestamp || r.firstTimestamp) }]} />; }
 
-function Nodes({ onSelect }) { const resource = useResource(api.nodes); const rows = resource.data?.data || []; return <><PageHeader eyebrow="Infrastructure" title="Nodes" description="Readiness, roles, capacity, and condition signals from every cluster node." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <Table rows={rows} onRow={onSelect} emptyTitle="No nodes returned" columns={[{ key: 'name', label: 'Node', render: (r) => <strong className="resource-name"><Server size={16} />{r.name}</strong> }, { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> }, { key: 'roles', label: 'Roles', render: (r) => r.roles?.join(', ') || '—' }, { key: 'kubernetesVersion', label: 'Version' }, { key: 'cpuCapacity', label: 'CPU capacity', render: (r) => <span className="mono">{display(r.cpuCapacity)}</span> }, { key: 'memoryCapacity', label: 'Memory capacity', render: (r) => <span className="mono">{formatMemoryQuantity(r.memoryCapacity)}</span> }, { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) }]} />}</>; }
+function Nodes({ onSelect }) {
+  const resource = useResource(api.nodes);
+  const rows = resource.data?.data || [];
+  return (
+    <>
+      <PageHeader
+        eyebrow="Infrastructure"
+        title="Nodes"
+        description="Readiness, roles, live usage, capacity, and condition signals from every cluster node."
+        action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>}
+      />
+      {resource.loading ? (
+        <Loading />
+      ) : resource.error ? (
+        <ErrorState error={resource.error} reload={resource.reload} />
+      ) : (
+        <Table
+          rows={rows}
+          onRow={onSelect}
+          emptyTitle="No nodes returned"
+          columns={[
+            { key: 'name', label: 'Node', render: (r) => <strong className="resource-name"><Server size={16} />{r.name}</strong> },
+            { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> },
+            { key: 'roles', label: 'Roles', render: (r) => r.roles?.join(', ') || '—' },
+            { key: 'kubernetesVersion', label: 'Version' },
+            {
+              key: 'cpuUsage',
+              label: 'CPU usage',
+              render: (r) => r.cpuUsage ? (
+                <div className="mini-usage-cell">
+                  <div className="mini-usage-info">
+                    <span className="mono">{r.cpuUsage}</span>
+                    <span className="pct">{r.cpuUsagePercentage}%</span>
+                  </div>
+                  <div className="mini-progress-track">
+                    <div
+                      className={`mini-progress-fill ${r.cpuUsagePercentage > 85 ? 'critical' : r.cpuUsagePercentage > 70 ? 'high' : 'cpu'}`}
+                      style={{ width: `${Math.min(100, r.cpuUsagePercentage)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : <span className="muted">—</span>,
+            },
+            { key: 'cpuCapacity', label: 'CPU capacity', render: (r) => <span className="mono">{display(r.cpuCapacity)}</span> },
+            {
+              key: 'memoryUsage',
+              label: 'Memory usage',
+              render: (r) => r.memoryUsage ? (
+                <div className="mini-usage-cell">
+                  <div className="mini-usage-info">
+                    <span className="mono">{r.memoryUsage}</span>
+                    <span className="pct">{r.memoryUsagePercentage}%</span>
+                  </div>
+                  <div className="mini-progress-track">
+                    <div
+                      className={`mini-progress-fill ${r.memoryUsagePercentage > 85 ? 'critical' : r.memoryUsagePercentage > 70 ? 'high' : 'memory'}`}
+                      style={{ width: `${Math.min(100, r.memoryUsagePercentage)}%` }}
+                    />
+                  </div>
+                </div>
+              ) : <span className="muted">—</span>,
+            },
+            { key: 'memoryCapacity', label: 'Memory capacity', render: (r) => <span className="mono">{formatMemoryQuantity(r.memoryCapacity)}</span> },
+            { key: 'creationTimestamp', label: 'Age', render: (r) => age(r.creationTimestamp) },
+          ]}
+        />
+      )}
+    </>
+  );
+}
 
 function Namespaces({ onSelect }) { const resource = useResource(api.namespaces); const rows = resource.data?.data || []; return <><PageHeader eyebrow="Organization" title="Namespaces" description="Namespace lifecycle and labels returned by the core API." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <Table rows={rows} onRow={onSelect} emptyTitle="No namespaces returned" columns={[{ key: 'name', label: 'Namespace', render: (r) => <strong className="resource-name"><Layers3 size={16} />{r.name}</strong> }, { key: 'status', label: 'Status', render: (r) => <Badge>{r.status}</Badge> }, { key: 'creationTimestamp', label: 'Created', render: (r) => formatDate(r.creationTimestamp) }, { key: 'labels', label: 'Labels', render: (r) => Object.keys(r.labels || {}).length || '—' }, { key: 'resourceSummary', label: 'Resource summary', render: () => <span className="muted">Not exposed</span> }]} />}</>; }
 

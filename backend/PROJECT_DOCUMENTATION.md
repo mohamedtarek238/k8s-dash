@@ -189,6 +189,7 @@ Example response:
 | GET | `/api/clusters/:clusterId` | Returns details for a specific registered cluster by ID |
 | GET | `/api/status` | Reports backend status and whether a Kubernetes API call succeeds |
 | GET | `/api/cluster` | Returns cluster version, context, server, resource counts, and node health |
+| GET | `/api/metrics/overview` | Returns live cluster CPU and Memory usage, capacity, allocatable, and usage percentages, along with per-node metrics from Kubernetes Metrics Server (`metrics.k8s.io/v1beta1`) |
 | GET | `/api/health` | Returns a cluster health score, status, and detected issues |
 | GET | `/api/troubleshooting` | Returns diagnostic issues grouped by severity |
 
@@ -200,7 +201,7 @@ Every resource and diagnostic endpoint accepts an optional `?cluster=<clusterId>
 
 | Method | Path | Query/path parameters | Description |
 |---|---|---|---|
-| GET | `/api/nodes` | None | Lists all nodes with readiness, roles, capacity, allocatable resources, and conditions |
+| GET | `/api/nodes` | Optional `cluster` | Lists all nodes with readiness, roles, live CPU and Memory usage and percentages, capacity, allocatable resources, and conditions |
 | GET | `/api/nodes/:name` | Path: `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed node information including roles, architecture, OS, versions, capacity, allocatable, conditions, addresses, taints, CIDRs, node health, and optionally scheduled pods and events |
 | GET | `/api/namespaces` | None | Lists namespaces with status and labels |
 | GET | `/api/namespaces/:name` | Path: `name`<br>Query: `includeRelated`, `includeEvents` | Returns detailed namespace view including phase, labels, annotations, finalizers, conditions, and optionally workload resource counts and events |

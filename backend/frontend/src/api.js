@@ -50,6 +50,7 @@ export const api = {
   status: () => data('/api/status'),
   cluster: () => data('/api/cluster'),
   health: () => data('/api/health'),
+  metricsOverview: () => data('/api/metrics/overview'),
   troubleshooting: () => data('/api/troubleshooting'),
   nodes: () => list('/api/nodes'),
   node: (name) => data(`/api/nodes/${encodeURIComponent(name)}`),

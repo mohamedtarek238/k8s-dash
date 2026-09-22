@@ -207,3 +207,35 @@ export function formatStorageQuantity(quantity) {
   return `${rounded} ${units[unitIndex]}`;
 }
 
+/**
+ * Format a Kubernetes CPU quantity into a clean human-readable representation.
+ *
+ * @param {string|number|null|undefined} quantity - Raw CPU quantity or millicores
+ * @returns {string} Formatted CPU string
+ */
+export function formatCpuQuantity(quantity) {
+  if (quantity === null || quantity === undefined || quantity === '') {
+    return '—';
+  }
+  if (typeof quantity === 'number') {
+    if (quantity >= 1000) {
+      return `${parseFloat((quantity / 1000).toFixed(2))} cores`;
+    }
+    return `${Math.round(quantity)}m`;
+  }
+  const str = String(quantity).trim();
+  if (str.endsWith('m')) {
+    const val = parseFloat(str.slice(0, -1));
+    if (val >= 1000) {
+      return `${parseFloat((val / 1000).toFixed(2))} cores`;
+    }
+    return `${Math.round(val)}m`;
+  }
+  const num = parseFloat(str);
+  if (!Number.isNaN(num)) {
+    return `${num} cores`;
+  }
+  return str;
+}
+
+

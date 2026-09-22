@@ -23,12 +23,14 @@ const operatorsRoutes = require('./operators.routes');
 const customResourcesRoutes = require('./customResources.routes');
 const storageRoutes = require('./storage.routes');
 const rbacRoutes = require('./rbac.routes');
+const metricsRoutes = require('./metrics.routes');
 
 const router = express.Router();
 
 router.use('/clusters', clustersRoutes);
 router.use('/status', statusRoutes);
 router.use('/cluster', clusterRoutes);
+router.use('/metrics', metricsRoutes);
 router.use('/nodes', nodesRoutes);
 router.use('/node', nodesRoutes);
 router.use('/namespaces', namespacesRoutes);
