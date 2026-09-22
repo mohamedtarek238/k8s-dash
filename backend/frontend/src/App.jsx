@@ -1737,7 +1737,7 @@ function StorageView({ onSelectPV, onSelectPVC, onSelectSC, onSelectCSI, onSelec
         </button>
       </div>
 
-      {activeTab !== 'overview' && (
+      {activeTab !== 'overview' && activeTab !== 'analysis' && (
         <Toolbar search={search} setSearch={setSearch} onRefresh={reloadAll}>
           {(activeTab === 'pvcs' || activeTab === 'snapshots') && (
             <input
@@ -2550,6 +2550,1029 @@ function RBACRelationshipFlow() {
   );
 }
 
+
+function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCRB }) {
+  const [viewMode, setViewMode] = useState('matrix');
+  
+  // Matrix / Global Filters
+  const [matrixSearch, setMatrixSearch] = useState('');
+  const [matrixNamespace, setMatrixNamespace] = useState('');
+  const [matrixApiGroup, setMatrixApiGroup] = useState('');
+  const [matrixResource, setMatrixResource] = useState('');
+  const [matrixVerb, setMatrixVerb] = useState('');
+  const [matrixScope, setMatrixScope] = useState('all'); // all, namespaced, cluster
+
+  // Subject Access / Effective Filters
+  const [selectedSubjectKey, setSelectedSubjectKey] = useState('');
+  const [subjectQuery, setSubjectQuery] = useState('');
+
+  // Resource Access Filters
+  const [resAccessNamespace, setResAccessNamespace] = useState('');
+  const [resAccessGroup, setResAccessGroup] = useState('');
+  const [resAccessResource, setResAccessResource] = useState('');
+  const [resAccessVerb, setResAccessVerb] = useState('');
+
+  // Global Search
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+
+  if (loading) return <Loading rows={5} />;
+  if (error) return <ErrorState error={error} reload={reload} />;
+  if (!data) return <Empty title="No analysis data" text="Unable to compute RBAC analysis for this cluster." />;
+
+  const {
+    subjects = [],
+    roles = [],
+    clusterRoles = [],
+    roleBindings = [],
+    clusterRoleBindings = [],
+    permissionMatrix = [],
+    indicators = {},
+    namespaces = [],
+    summary = {}
+  } = data;
+
+  // 1. Permission Matrix Filtering
+  const filteredMatrix = (permissionMatrix || []).filter((entry) => {
+    if (!entry) return false;
+    if (matrixNamespace && entry.scope !== matrixNamespace && !entry.isClusterScoped) return false;
+    if (matrixScope === 'namespaced' && entry.isClusterScoped) return false;
+    if (matrixScope === 'cluster' && !entry.isClusterScoped) return false;
+    if (matrixApiGroup && !((entry.apiGroups || []).some((g) => (g === '' ? 'core' : g).toLowerCase().includes(matrixApiGroup.toLowerCase())))) return false;
+    if (matrixResource && !((entry.resources || []).some((r) => r.toLowerCase().includes(matrixResource.toLowerCase())))) return false;
+    if (matrixVerb && !(entry.verbs || []).includes('*') && !(entry.verbs || []).map((v) => v.toLowerCase()).includes(matrixVerb.toLowerCase())) return false;
+    if (matrixSearch) {
+      const q = matrixSearch.toLowerCase();
+      const matchSubject = `${entry.subject?.kind || ''} ${entry.subject?.display || ''}`.toLowerCase().includes(q);
+      const matchBinding = (entry.binding?.name || '').toLowerCase().includes(q);
+      const matchRole = (entry.role?.name || '').toLowerCase().includes(q);
+      const matchRes = (entry.resources || []).some((r) => r.toLowerCase().includes(q));
+      if (!matchSubject && !matchBinding && !matchRole && !matchRes) return false;
+    }
+    return true;
+  });
+
+  // Unique Subjects filtered for picker
+  const filteredSubjects = (subjects || []).filter((s) =>
+    !subjectQuery || `${s.kind || ''} ${s.display || ''}`.toLowerCase().includes(subjectQuery.toLowerCase())
+  );
+  const activeSubject =
+    (subjects || []).find((s) => `${s.kind}:${s.namespace || ''}:${s.name}` === selectedSubjectKey) ||
+    filteredSubjects[0] ||
+    (subjects || [])[0] ||
+    null;
+
+  // Subject specific entries
+  const subjectEntries = activeSubject
+    ? (permissionMatrix || []).filter(
+        (e) =>
+          e.subject &&
+          e.subject.kind === activeSubject.kind &&
+          e.subject.name === activeSubject.name &&
+          (e.subject.namespace === activeSubject.namespace || !e.subject.namespace)
+      )
+    : [];
+
+  // Subject bindings
+  const subjectRoleBindings = activeSubject
+    ? (roleBindings || []).filter((rb) =>
+        (rb.subjects || []).some(
+          (s) =>
+            s.kind === activeSubject.kind &&
+            s.name === activeSubject.name &&
+            (s.namespace === activeSubject.namespace || !s.namespace)
+        )
+      )
+    : [];
+
+  const subjectClusterRoleBindings = activeSubject
+    ? (clusterRoleBindings || []).filter((crb) =>
+        (crb.subjects || []).some(
+          (s) =>
+            s.kind === activeSubject.kind &&
+            s.name === activeSubject.name &&
+            (s.namespace === activeSubject.namespace || !s.namespace)
+        )
+      )
+    : [];
+
+  // 4. Effective Permissions Calculation
+  const effectiveRulesMap = new Map();
+  if (activeSubject) {
+    for (const entry of subjectEntries) {
+      for (const res of entry.resources || []) {
+        for (const grp of ((entry.apiGroups || []).length ? entry.apiGroups : [''])) {
+          const resNames = (entry.resourceNames || []).length ? entry.resourceNames.slice().sort().join(',') : '*';
+          const key = `${grp}:${res}:${resNames}:${entry.scope}`;
+          if (!effectiveRulesMap.has(key)) {
+            effectiveRulesMap.set(key, {
+              apiGroup: grp === '' ? 'core ("")' : grp,
+              resource: res,
+              resourceNames: (entry.resourceNames || []).length ? entry.resourceNames : ['* (all)'],
+              scope: entry.scope,
+              isClusterScoped: entry.isClusterScoped,
+              verbs: new Set(entry.verbs || []),
+              sources: new Set([`${entry.binding?.kind}/${entry.binding?.name} -> ${entry.role?.kind}/${entry.role?.name}`]),
+            });
+          } else {
+            const item = effectiveRulesMap.get(key);
+            (entry.verbs || []).forEach((v) => item.verbs.add(v));
+            item.sources.add(`${entry.binding?.kind}/${entry.binding?.name} -> ${entry.role?.kind}/${entry.role?.name}`);
+          }
+        }
+      }
+    }
+  }
+  const effectiveRulesList = Array.from(effectiveRulesMap.values()).map((item) => ({
+    ...item,
+    verbs: Array.from(item.verbs),
+    sources: Array.from(item.sources),
+  }));
+
+  // 3. Resource Access Matching
+  const resourceAccessMatches = (permissionMatrix || []).filter((entry) => {
+    if (!entry) return false;
+    if (resAccessNamespace && entry.scope !== resAccessNamespace && !entry.isClusterScoped) return false;
+    if (resAccessGroup && !((entry.apiGroups || []).some((g) => (g === '' ? 'core' : g).toLowerCase().includes(resAccessGroup.toLowerCase())))) return false;
+    if (resAccessResource && !((entry.resources || []).some((r) => r.toLowerCase().includes(resAccessResource.toLowerCase()) || r === '*'))) return false;
+    if (resAccessVerb && !(entry.verbs || []).includes('*') && !(entry.verbs || []).map((v) => v.toLowerCase()).includes(resAccessVerb.toLowerCase())) return false;
+    return true;
+  });
+
+  const distinctMatchingSubjects = Array.from(
+    new Map(
+      resourceAccessMatches
+        .filter((m) => m.subject)
+        .map((m) => [`${m.subject.kind}:${m.subject.namespace || ''}:${m.subject.name}`, m.subject])
+    ).values()
+  );
+
+  // 5. Global Search matches
+  const gq = (globalSearchQuery || '').trim().toLowerCase();
+  const globalMatches = gq
+    ? {
+        serviceAccounts: (subjects || []).filter(
+          (s) => s.kind === 'ServiceAccount' && `${s.name} ${s.namespace || ''}`.toLowerCase().includes(gq)
+        ),
+        roles: (roles || []).filter(
+          (r) =>
+            (r.name || '').toLowerCase().includes(gq) ||
+            (r.namespace || '').toLowerCase().includes(gq) ||
+            (r.rules || []).some((rule) => (rule.resources || []).some((res) => res.toLowerCase().includes(gq)))
+        ),
+        clusterRoles: (clusterRoles || []).filter(
+          (cr) =>
+            (cr.name || '').toLowerCase().includes(gq) ||
+            (cr.rules || []).some((rule) => (rule.resources || []).some((res) => res.toLowerCase().includes(gq)))
+        ),
+        roleBindings: (roleBindings || []).filter(
+          (rb) =>
+            (rb.name || '').toLowerCase().includes(gq) ||
+            (rb.namespace || '').toLowerCase().includes(gq) ||
+            (rb.roleRef?.name || '').toLowerCase().includes(gq) ||
+            (rb.subjects || []).some((s) => (s.name || '').toLowerCase().includes(gq))
+        ),
+        clusterRoleBindings: (clusterRoleBindings || []).filter(
+          (crb) =>
+            (crb.name || '').toLowerCase().includes(gq) ||
+            (crb.roleRef?.name || '').toLowerCase().includes(gq) ||
+            (crb.subjects || []).some((s) => (s.name || '').toLowerCase().includes(gq))
+        ),
+        matrixPermissions: (permissionMatrix || []).filter(
+          (p) =>
+            (p.resources || []).some((r) => r.toLowerCase().includes(gq)) ||
+            (p.verbs || []).some((v) => v.toLowerCase().includes(gq)) ||
+            (p.subject?.name || '').toLowerCase().includes(gq)
+        ),
+      }
+    : null;
+
+  return (
+    <div style={{ marginTop: '16px' }}>
+      {/* Sub-mode switcher */}
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+        <button
+          className={`button subtle ${viewMode === 'matrix' ? 'primary' : ''}`}
+          onClick={() => setViewMode('matrix')}
+        >
+          <Layers3 size={14} /> Permission Matrix ({(permissionMatrix || []).length})
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'subject' ? 'primary' : ''}`}
+          onClick={() => setViewMode('subject')}
+        >
+          <Box size={14} /> Subject Access View
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'resource' ? 'primary' : ''}`}
+          onClick={() => setViewMode('resource')}
+        >
+          <Search size={14} /> Resource Access View
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'effective' ? 'primary' : ''}`}
+          onClick={() => setViewMode('effective')}
+        >
+          <Shield size={14} /> Effective Permissions
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'globalsearch' ? 'primary' : ''}`}
+          onClick={() => setViewMode('globalsearch')}
+        >
+          <Globe size={14} /> Global RBAC Search
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'indicators' ? 'primary' : ''}`}
+          onClick={() => setViewMode('indicators')}
+        >
+          <Activity size={14} /> Configuration Indicators
+        </button>
+        <button
+          className={`button subtle ${viewMode === 'graph' ? 'primary' : ''}`}
+          onClick={() => setViewMode('graph')}
+        >
+          <Network size={14} /> Relationship Graph
+        </button>
+      </div>
+
+      {/* 1. PERMISSION MATRIX */}
+      {viewMode === 'matrix' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Authorization Grid</span>
+              <h2>RBAC Permission Matrix</h2>
+            </div>
+            <Badge tone="teal">Showing {filteredMatrix.length} of {(permissionMatrix || []).length} entries</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '16px' }}>
+            <input
+              className="select"
+              value={matrixSearch}
+              onChange={(e) => setMatrixSearch(e.target.value)}
+              placeholder="Search subject / role / resource..."
+            />
+            <select className="select" value={matrixNamespace} onChange={(e) => setMatrixNamespace(e.target.value)}>
+              <option value="">All Namespaces</option>
+              {(namespaces || []).map((ns) => (
+                <option key={ns} value={ns}>{ns}</option>
+              ))}
+            </select>
+            <input
+              className="select"
+              value={matrixApiGroup}
+              onChange={(e) => setMatrixApiGroup(e.target.value)}
+              placeholder="Filter API Group (e.g. apps, core)"
+            />
+            <input
+              className="select"
+              value={matrixResource}
+              onChange={(e) => setMatrixResource(e.target.value)}
+              placeholder="Filter Resource (e.g. pods, secrets)"
+            />
+            <select className="select" value={matrixVerb} onChange={(e) => setMatrixVerb(e.target.value)}>
+              <option value="">All Verbs</option>
+              {['get', 'list', 'watch', 'create', 'update', 'patch', 'delete', '*'].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+            <select className="select" value={matrixScope} onChange={(e) => setMatrixScope(e.target.value)}>
+              <option value="all">All Scopes</option>
+              <option value="namespaced">Namespaced only</option>
+              <option value="cluster">Cluster-wide only</option>
+            </select>
+          </div>
+
+          {!filteredMatrix.length ? (
+            <Empty title="No permissions match your filters" text="Try clearing search queries or expanding the namespace selection." />
+          ) : (
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Subject</th>
+                    <th>Scope</th>
+                    <th>API Group</th>
+                    <th>Resource</th>
+                    <th>Resource Names</th>
+                    <th>Verbs</th>
+                    <th>Source Binding</th>
+                    <th>Source Role</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMatrix.slice(0, 200).map((entry, idx) => (
+                    <tr key={idx}>
+                      <td>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Badge tone="info">{entry.subject?.kind || 'Subject'}</Badge>
+                          <strong
+                            className="resource-name clickable"
+                            onClick={() =>
+                              entry.subject?.kind === 'ServiceAccount' &&
+                              onSelectSA?.({ name: entry.subject.name, namespace: entry.subject.namespace || 'default' })
+                            }
+                          >
+                            {entry.subject?.display || entry.subject?.name}
+                          </strong>
+                        </div>
+                      </td>
+                      <td>
+                        <Badge tone={entry.isClusterScoped ? 'purple' : 'teal'}>{entry.scope}</Badge>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {(entry.apiGroups || []).map((g, i) => (
+                            <Badge key={i} tone="info">{g === '' ? 'core' : g}</Badge>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {(entry.resources || []).map((r, i) => (
+                            <strong key={i} style={{ fontSize: '12px' }}>{r}</strong>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="mono" style={{ fontSize: '12px' }}>
+                          {(entry.resourceNames || []).length ? entry.resourceNames.join(', ') : '*'}
+                        </span>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                          {(entry.verbs || []).map((v, i) => (
+                            <Badge key={i} tone={verbBadgeTone(v)}>{v}</Badge>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className="mono clickable"
+                          onClick={() =>
+                            entry.binding?.kind === 'RoleBinding'
+                              ? onSelectRB?.({ name: entry.binding.name, namespace: entry.binding.namespace })
+                              : onSelectCRB?.({ name: entry.binding?.name })
+                          }
+                          style={{ fontSize: '12px', color: '#38bdf8' }}
+                        >
+                          {entry.binding?.name}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="mono clickable"
+                          onClick={() =>
+                            entry.role?.kind === 'Role'
+                              ? onSelectRole?.({ name: entry.role.name, namespace: entry.role.namespace })
+                              : onSelectCR?.({ name: entry.role?.name })
+                          }
+                          style={{ fontSize: '12px', color: '#c084fc' }}
+                        >
+                          {entry.role?.name}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredMatrix.length > 200 && (
+                <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '12px' }}>
+                  Showing first 200 of {filteredMatrix.length} matching permission records. Use filters above to narrow your query.
+                </div>
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 2. SUBJECT ACCESS VIEW */}
+      {viewMode === 'subject' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Identity-to-Permissions Traversal</span>
+              <h2>Subject Access View</h2>
+            </div>
+            {activeSubject && <Badge tone="info">{activeSubject.kind}: {activeSubject.display}</Badge>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1', minWidth: '240px' }}>
+              <input
+                className="select"
+                value={subjectQuery}
+                onChange={(e) => setSubjectQuery(e.target.value)}
+                placeholder="Filter subjects list..."
+              />
+            </div>
+            <div style={{ flex: '2', minWidth: '280px' }}>
+              <select
+                className="select"
+                value={selectedSubjectKey || (activeSubject ? `${activeSubject.kind}:${activeSubject.namespace || ''}:${activeSubject.name}` : '')}
+                onChange={(e) => setSelectedSubjectKey(e.target.value)}
+              >
+                {filteredSubjects.map((sub) => {
+                  const key = `${sub.kind}:${sub.namespace || ''}:${sub.name}`;
+                  return (
+                    <option key={key} value={key}>
+                      [{sub.kind}] {sub.display}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {activeSubject ? (
+            <div>
+              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Box size={22} color="#38bdf8" />
+                    <div>
+                      <strong style={{ fontSize: '15px' }}>{activeSubject.name}</strong>
+                      <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        Kind: <Badge tone="info">{activeSubject.kind}</Badge> {activeSubject.namespace && <>· Namespace: <Badge tone="teal">{activeSubject.namespace}</Badge></>}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>RoleBindings</span>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{subjectRoleBindings.length}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ClusterRoleBindings</span>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px' }}>{subjectClusterRoleBindings.length}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Declared Rules</span>
+                      <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#38bdf8' }}>{subjectEntries.length}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <h3>1. Namespaced RoleBindings ({subjectRoleBindings.length})</h3>
+              {subjectRoleBindings.length ? (
+                <div className="mini-list" style={{ marginBottom: '16px' }}>
+                  {subjectRoleBindings.map((rb, idx) => (
+                    <div key={idx} className="clickable" onClick={() => onSelectRB?.(rb)}>
+                      <div>
+                        <strong><Network size={14} /> {rb.name}</strong>
+                        <span>Namespace: {rb.namespace} · RoleRef: {rb.roleRef?.kind}/{rb.roleRef?.name}</span>
+                      </div>
+                      <Badge tone={rb.roleRef?.kind === 'ClusterRole' ? 'purple' : 'info'}>{rb.roleRef?.kind}</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted" style={{ fontSize: '13px', marginBottom: '16px' }}>No namespaced RoleBindings bind this subject directly.</p>
+              )}
+
+              <h3>2. ClusterRoleBindings ({subjectClusterRoleBindings.length})</h3>
+              {subjectClusterRoleBindings.length ? (
+                <div className="mini-list" style={{ marginBottom: '16px' }}>
+                  {subjectClusterRoleBindings.map((crb, idx) => (
+                    <div key={idx} className="clickable" onClick={() => onSelectCRB?.(crb)}>
+                      <div>
+                        <strong><Network size={14} /> {crb.name}</strong>
+                        <span>Cluster-Wide · RoleRef: ClusterRole/{crb.roleRef?.name}</span>
+                      </div>
+                      <Badge tone="purple">Cluster-Wide</Badge>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted" style={{ fontSize: '13px', marginBottom: '16px' }}>No ClusterRoleBindings bind this subject directly.</p>
+              )}
+
+              <h3>3. Resolved Granted Rules ({subjectEntries.length})</h3>
+              {!subjectEntries.length ? (
+                <Empty title="No permission rules found" text="This subject has no active role bindings or grants no rules." />
+              ) : (
+                <RBACRuleTable rules={subjectEntries} />
+              )}
+            </div>
+          ) : (
+            <Empty title="Select a subject" text="Choose a ServiceAccount, User, or Group above to inspect its access graph." />
+          )}
+        </section>
+      )}
+
+      {/* 3. RESOURCE ACCESS VIEW */}
+      {viewMode === 'resource' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Who Can Access What</span>
+              <h2>Resource Access View</h2>
+            </div>
+            <Badge tone="teal">{distinctMatchingSubjects.length} Authorized Subjects</Badge>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '8px', marginBottom: '16px' }}>
+            <select className="select" value={resAccessNamespace} onChange={(e) => setResAccessNamespace(e.target.value)}>
+              <option value="">All Namespaces</option>
+              {(namespaces || []).map((ns) => (
+                <option key={ns} value={ns}>{ns}</option>
+              ))}
+            </select>
+            <input
+              className="select"
+              value={resAccessGroup}
+              onChange={(e) => setResAccessGroup(e.target.value)}
+              placeholder="API Group (e.g. apps, core)"
+            />
+            <input
+              className="select"
+              value={resAccessResource}
+              onChange={(e) => setResAccessResource(e.target.value)}
+              placeholder="Target Resource (e.g. pods, secrets, *)"
+            />
+            <select className="select" value={resAccessVerb} onChange={(e) => setResAccessVerb(e.target.value)}>
+              <option value="">Any Verb (*)</option>
+              {['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'].map((v) => (
+                <option key={v} value={v}>{v}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px', alignItems: 'start' }}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <strong style={{ fontSize: '13px' }}>Matching Subjects</strong>
+                <Badge tone="info">{distinctMatchingSubjects.length}</Badge>
+              </div>
+              <div className="mini-list" style={{ maxHeight: '420px', overflowY: 'auto' }}>
+                {distinctMatchingSubjects.map((sub, i) => (
+                  <div
+                    key={i}
+                    className="clickable"
+                    onClick={() => {
+                      setSelectedSubjectKey(`${sub.kind}:${sub.namespace || ''}:${sub.name}`);
+                      setViewMode('effective');
+                    }}
+                  >
+                    <div>
+                      <strong>{sub.name}</strong>
+                      <span>{sub.kind} {sub.namespace ? `· ${sub.namespace}` : ''}</span>
+                    </div>
+                    <ChevronRight size={14} />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <strong style={{ fontSize: '13px', display: 'block', marginBottom: '8px' }}>
+                Declared Permission Mappings ({resourceAccessMatches.length})
+              </strong>
+              {!resourceAccessMatches.length ? (
+                <Empty title="No matching RBAC rules" text="No subjects have declared rules matching these criteria." />
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Subject</th>
+                        <th>Scope</th>
+                        <th>Resource</th>
+                        <th>Verbs</th>
+                        <th>Via Binding</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resourceAccessMatches.slice(0, 100).map((m, idx) => (
+                        <tr key={idx}>
+                          <td>
+                            <strong style={{ fontSize: '12px' }}>{m.subject?.display || m.subject?.name}</strong>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{m.subject?.kind}</div>
+                          </td>
+                          <td><Badge tone={m.isClusterScoped ? 'purple' : 'teal'}>{m.scope}</Badge></td>
+                          <td><span className="mono" style={{ fontSize: '12px' }}>{(m.resources || []).join(', ')}</span></td>
+                          <td>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                              {(m.verbs || []).map((v, i) => (
+                                <Badge key={i} tone={verbBadgeTone(v)}>{v}</Badge>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            <span className="mono" style={{ fontSize: '11px' }}>{m.binding?.name}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* 4. EFFECTIVE PERMISSIONS */}
+      {viewMode === 'effective' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Deduplicated Authority</span>
+              <h2>Effective Permissions Analysis</h2>
+            </div>
+            {activeSubject && <Badge tone="teal">{effectiveRulesList.length} Consolidated Rule Sets</Badge>}
+          </div>
+
+          <div style={{ padding: '12px 16px', background: 'rgba(56, 189, 248, 0.05)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)', marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertTriangle size={16} color="#38bdf8" />
+            <span>
+              <strong>Declared RBAC Permissions:</strong> This view aggregates rules declared across RoleBindings and ClusterRoleBindings. Cluster Admission Webhooks, Node authorizers, and namespace quotas may also govern access.
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1', minWidth: '240px' }}>
+              <input
+                className="select"
+                value={subjectQuery}
+                onChange={(e) => setSubjectQuery(e.target.value)}
+                placeholder="Filter subjects list..."
+              />
+            </div>
+            <div style={{ flex: '2', minWidth: '280px' }}>
+              <select
+                className="select"
+                value={selectedSubjectKey || (activeSubject ? `${activeSubject.kind}:${activeSubject.namespace || ''}:${activeSubject.name}` : '')}
+                onChange={(e) => setSelectedSubjectKey(e.target.value)}
+              >
+                {filteredSubjects.map((sub) => {
+                  const key = `${sub.kind}:${sub.namespace || ''}:${sub.name}`;
+                  return (
+                    <option key={key} value={key}>
+                      [{sub.kind}] {sub.display}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {activeSubject ? (
+            !effectiveRulesList.length ? (
+              <Empty title="No effective permissions found" text="This subject is not granted any permissions via active bindings." />
+            ) : (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>API Group</th>
+                      <th>Resource</th>
+                      <th>Resource Names</th>
+                      <th>Scope</th>
+                      <th>Consolidated Verbs</th>
+                      <th>Granted Via</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {effectiveRulesList.map((rule, idx) => (
+                      <tr key={idx}>
+                        <td><Badge tone="info">{rule.apiGroup}</Badge></td>
+                        <td><strong style={{ fontSize: '13px' }}>{rule.resource}</strong></td>
+                        <td><span className="mono" style={{ fontSize: '12px' }}>{rule.resourceNames.join(', ')}</span></td>
+                        <td><Badge tone={rule.isClusterScoped ? 'purple' : 'teal'}>{rule.scope}</Badge></td>
+                        <td>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                            {rule.verbs.map((v, i) => (
+                              <Badge key={i} tone={verbBadgeTone(v)}>{v}</Badge>
+                            ))}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            {rule.sources.map((src, i) => (
+                              <span key={i} className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{src}</span>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            <Empty title="Select a subject" text="Choose a subject to compute its effective permissions." />
+          )}
+        </section>
+      )}
+
+      {/* 5. GLOBAL RBAC SEARCH */}
+      {viewMode === 'globalsearch' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Multi-Object Search</span>
+              <h2>Global RBAC Search</h2>
+            </div>
+            {globalMatches && (
+              <Badge tone="teal">
+                {(globalMatches.serviceAccounts.length + globalMatches.roles.length + globalMatches.clusterRoles.length + globalMatches.roleBindings.length + globalMatches.clusterRoleBindings.length)} Object Matches
+              </Badge>
+            )}
+          </div>
+
+          <div style={{ marginBottom: '16px' }}>
+            <input
+              className="select"
+              style={{ width: '100%', fontSize: '14px', padding: '10px 14px' }}
+              value={globalSearchQuery}
+              onChange={(e) => setGlobalSearchQuery(e.target.value)}
+              placeholder="Type anything (e.g. cluster-admin, secrets, system:node, *)..."
+            />
+          </div>
+
+          {!globalMatches ? (
+            <Empty title="Type a search query" text="Search across ServiceAccounts, Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, and permissions." />
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong><Box size={14} /> Service Accounts</strong>
+                  <Badge tone="info">{globalMatches.serviceAccounts.length}</Badge>
+                </div>
+                <div className="mini-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {globalMatches.serviceAccounts.map((sa, i) => (
+                    <div key={i} className="clickable" onClick={() => onSelectSA?.(sa)}>
+                      <strong>{sa.name}</strong>
+                      <Badge tone="teal">{sa.namespace}</Badge>
+                    </div>
+                  ))}
+                  {!globalMatches.serviceAccounts.length && <span className="muted" style={{ fontSize: '12px' }}>No matches</span>}
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong><Shield size={14} /> Roles & ClusterRoles</strong>
+                  <Badge tone="info">{globalMatches.roles.length + globalMatches.clusterRoles.length}</Badge>
+                </div>
+                <div className="mini-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {globalMatches.roles.map((r, i) => (
+                    <div key={i} className="clickable" onClick={() => onSelectRole?.(r)}>
+                      <strong>{r.name}</strong>
+                      <Badge tone="info">{r.namespace}</Badge>
+                    </div>
+                  ))}
+                  {globalMatches.clusterRoles.map((cr, i) => (
+                    <div key={i} className="clickable" onClick={() => onSelectCR?.(cr)}>
+                      <strong>{cr.name}</strong>
+                      <Badge tone="purple">ClusterRole</Badge>
+                    </div>
+                  ))}
+                  {!globalMatches.roles.length && !globalMatches.clusterRoles.length && <span className="muted" style={{ fontSize: '12px' }}>No matches</span>}
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <strong><Network size={14} /> Bindings</strong>
+                  <Badge tone="info">{globalMatches.roleBindings.length + globalMatches.clusterRoleBindings.length}</Badge>
+                </div>
+                <div className="mini-list" style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                  {globalMatches.roleBindings.map((rb, i) => (
+                    <div key={i} className="clickable" onClick={() => onSelectRB?.(rb)}>
+                      <strong>{rb.name}</strong>
+                      <Badge tone="info">{rb.namespace}</Badge>
+                    </div>
+                  ))}
+                  {globalMatches.clusterRoleBindings.map((crb, i) => (
+                    <div key={i} className="clickable" onClick={() => onSelectCRB?.(crb)}>
+                      <strong>{crb.name}</strong>
+                      <Badge tone="purple">ClusterRoleBinding</Badge>
+                    </div>
+                  ))}
+                  {!globalMatches.roleBindings.length && !globalMatches.clusterRoleBindings.length && <span className="muted" style={{ fontSize: '12px' }}>No matches</span>}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 6. CONFIGURATION INDICATORS */}
+      {viewMode === 'indicators' && (
+        <div>
+          <div style={{ padding: '12px 16px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.06)', marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
+            <strong>Factual Configuration Patterns:</strong> Objective patterns discovered across declared RBAC objects in this cluster.
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Shield size={16} /> Wildcard API Groups</h3>
+                <Badge tone="info">{indicators.wildcardApiGroups?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Roles declaring `apiGroups: ["*"]`</p>
+              <div className="mini-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {(indicators.wildcardApiGroups?.roles || []).map((r, i) => (
+                  <div key={i} className="clickable" onClick={() => r.kind === 'Role' ? onSelectRole?.(r) : onSelectCR?.(r)}>
+                    <strong>{r.name}</strong>
+                    <Badge tone={r.kind === 'ClusterRole' ? 'purple' : 'info'}>{r.kind}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Shield size={16} /> Wildcard Resources</h3>
+                <Badge tone="info">{indicators.wildcardResources?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Roles declaring `resources: ["*"]`</p>
+              <div className="mini-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {(indicators.wildcardResources?.roles || []).map((r, i) => (
+                  <div key={i} className="clickable" onClick={() => r.kind === 'Role' ? onSelectRole?.(r) : onSelectCR?.(r)}>
+                    <strong>{r.name}</strong>
+                    <Badge tone={r.kind === 'ClusterRole' ? 'purple' : 'info'}>{r.kind}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Shield size={16} /> Wildcard Verbs</h3>
+                <Badge tone="info">{indicators.wildcardVerbs?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Roles declaring `verbs: ["*"]`</p>
+              <div className="mini-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {(indicators.wildcardVerbs?.roles || []).map((r, i) => (
+                  <div key={i} className="clickable" onClick={() => r.kind === 'Role' ? onSelectRole?.(r) : onSelectCR?.(r)}>
+                    <strong>{r.name}</strong>
+                    <Badge tone={r.kind === 'ClusterRole' ? 'purple' : 'info'}>{r.kind}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Network size={16} /> cluster-admin Bindings</h3>
+                <Badge tone="purple">{indicators.clusterAdminBindings?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Bindings referencing ClusterRole/cluster-admin</p>
+              <div className="mini-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {(indicators.clusterAdminBindings?.bindings || []).map((b, i) => (
+                  <div key={i} className="clickable" onClick={() => b.kind === 'RoleBinding' ? onSelectRB?.(b) : onSelectCRB?.(b)}>
+                    <strong>{b.name}</strong>
+                    <Badge tone={b.kind === 'ClusterRoleBinding' ? 'purple' : 'info'}>{b.kind}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Globe size={16} /> Non-Resource URL Rules</h3>
+                <Badge tone="teal">{indicators.nonResourceUrls?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Roles declaring nonResourceURLs rules</p>
+              <div className="mini-list" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                {(indicators.nonResourceUrls?.roles || []).map((r, i) => (
+                  <div key={i} className="clickable" onClick={() => r.kind === 'Role' ? onSelectRole?.(r) : onSelectCR?.(r)}>
+                    <strong>{r.name}</strong>
+                    <Badge tone={r.kind === 'ClusterRole' ? 'purple' : 'info'}>{r.kind}</Badge>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Box size={16} /> ServiceAccount Bindings</h3>
+                <Badge tone="teal">{indicators.serviceAccountBindings?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Total bindings assigned to workload ServiceAccounts</p>
+            </div>
+
+            <div className="storage-overview-card">
+              <div className="storage-overview-card-header">
+                <h3><Box size={16} /> User & Group Bindings</h3>
+                <Badge tone="info">{indicators.userGroupBindings?.count || 0}</Badge>
+              </div>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>Total bindings assigned to User or Group identities</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. RELATIONSHIP GRAPH */}
+      {viewMode === 'graph' && (
+        <section className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Visual Authorization Graph</span>
+              <h2>RBAC Relationship Graph</h2>
+            </div>
+            {activeSubject && <Badge tone="info">{activeSubject.display}</Badge>}
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1', minWidth: '240px' }}>
+              <input
+                className="select"
+                value={subjectQuery}
+                onChange={(e) => setSubjectQuery(e.target.value)}
+                placeholder="Search subject..."
+              />
+            </div>
+            <div style={{ flex: '2', minWidth: '280px' }}>
+              <select
+                className="select"
+                value={selectedSubjectKey || (activeSubject ? `${activeSubject.kind}:${activeSubject.namespace || ''}:${activeSubject.name}` : '')}
+                onChange={(e) => setSelectedSubjectKey(e.target.value)}
+              >
+                {filteredSubjects.map((sub) => {
+                  const key = `${sub.kind}:${sub.namespace || ''}:${sub.name}`;
+                  return (
+                    <option key={key} value={key}>
+                      [{sub.kind}] {sub.display}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          </div>
+
+          {activeSubject ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ padding: '16px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '8px', border: '1px solid rgba(56, 189, 248, 0.2)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Box size={24} color="#38bdf8" />
+                <div>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Selected Subject Node</span>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#38bdf8' }}>{activeSubject.display} ({activeSubject.kind})</div>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
+                {subjectRoleBindings.map((rb, i) => (
+                  <div key={i} style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#c084fc', marginBottom: '6px' }}>
+                      <Network size={16} />
+                      <strong>RoleBinding: {rb.name}</strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      Namespace: {rb.namespace} · Target Role: <strong style={{ color: '#fbbf24' }}>{rb.roleRef?.kind}/{rb.roleRef?.name}</strong>
+                    </div>
+                    <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Rules granted via this binding</span>
+                      <div style={{ marginTop: '4px', fontSize: '12px' }}>
+                        {(permissionMatrix || []).filter((e) => e.binding?.name === rb.name).map((e, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                            <Badge tone="teal">{(e.resources || []).join(', ')}</Badge>
+                            <span style={{ fontSize: '11px' }}>({(e.verbs || []).join(', ')})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {subjectClusterRoleBindings.map((crb, i) => (
+                  <div key={i} style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#c084fc', marginBottom: '6px' }}>
+                      <Network size={16} />
+                      <strong>ClusterRoleBinding: {crb.name}</strong>
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                      Cluster-Wide · Target Role: <strong style={{ color: '#fbbf24' }}>ClusterRole/{crb.roleRef?.name}</strong>
+                    </div>
+                    <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px' }}>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Rules granted via this binding</span>
+                      <div style={{ marginTop: '4px', fontSize: '12px' }}>
+                        {(permissionMatrix || []).filter((e) => e.binding?.name === crb.name).map((e, idx) => (
+                          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                            <Badge tone="purple">{(e.resources || []).join(', ')}</Badge>
+                            <span style={{ fontSize: '11px' }}>({(e.verbs || []).join(', ')})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Empty title="Select a subject" text="Choose a subject to render its authorization graph." />
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+
 function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCRB }) {
   console.log("[RBAC DEBUG] RBACPage rendered");
   const [activeTab, setActiveTab] = useState('overview');
@@ -2557,6 +3580,7 @@ function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCR
   const [search, setSearch] = useState('');
 
   const overviewResource = useResource(api.rbacOverview, []);
+  const analysisResource = useResource(api.rbacAnalysis, []);
   const sasResource = useResource(() => api.serviceAccounts(namespace, { search }), [namespace, search]);
   const rolesResource = useResource(() => api.roles(namespace, { search }), [namespace, search]);
   const rbsResource = useResource(() => api.roleBindings(namespace, { search }), [namespace, search]);
@@ -2572,6 +3596,7 @@ function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCR
 
   const reloadAll = () => {
     overviewResource.reload();
+    analysisResource.reload();
     sasResource.reload();
     rolesResource.reload();
     rbsResource.reload();
@@ -2666,6 +3691,12 @@ function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCR
           onClick={() => setActiveTab('clusterrolebindings')}
         >
           <Network size={15} /> Cluster Role Bindings ({overview.clusterRoleBindings?.total ?? crbs.length})
+        </button>
+        <button
+          className={`sub-nav-tab ${activeTab === 'analysis' ? 'active' : ''}`}
+          onClick={() => setActiveTab('analysis')}
+        >
+          <Activity size={15} /> Advanced Analysis
         </button>
       </div>
 
@@ -3025,6 +4056,18 @@ function RBACView({ onSelectSA, onSelectRole, onSelectRB, onSelectCR, onSelectCR
             ]}
           />
         )
+      ) : activeTab === 'analysis' ? (
+        <RBACAdvancedAnalysis
+          data={analysisResource.data}
+          loading={analysisResource.loading}
+          error={analysisResource.error}
+          reload={analysisResource.reload}
+          onSelectSA={onSelectSA}
+          onSelectRole={onSelectRole}
+          onSelectRB={onSelectRB}
+          onSelectCR={onSelectCR}
+          onSelectCRB={onSelectCRB}
+        />
       ) : null}
     </>
   );

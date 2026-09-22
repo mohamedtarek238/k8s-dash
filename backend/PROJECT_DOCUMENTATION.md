@@ -750,7 +750,64 @@ The Kubernetes Operators & CRDs Explorer enables seamless inspection of all cust
 ### 20.3 Multi-Cluster Integration
 Every request to `/api/crds`, `/api/operators`, and `/api/custom-resources` honors the `?cluster=<id>` query parameter, allowing instant switching between production, staging, and development cluster environments.
 
-## 21. License
+## 21. Storage Architecture
+
+### 21.1 Storage Subsystem Overview
+The Storage subsystem provides a centralized, read-only view of persistent storage infrastructure in the Kubernetes cluster:
+- **PersistentVolumeClaims (PVC)**: Namespace-scoped claims mapped to phase (`Bound`, `Pending`, `Lost`), access modes, capacity, storage class, and bound volume references.
+- **PersistentVolumes (PV)**: Cluster-wide storage volumes tracking reclaim policies, access modes, capacity, phase, storage class, and CSI plugin specifications.
+- **StorageClasses (SC)**: Provisioner configuration, volume expansion flags, reclaim policies, and binding modes (`Immediate`, `WaitForFirstConsumer`).
+- **VolumeAttachments & CSI Nodes**: CSI driver node mappings and real-time attachment state inspection.
+
+### 21.2 Storage Endpoints
+- `GET /api/storage/overview`: Aggregated cluster-wide storage metrics and resource distributions.
+- `GET /api/storage/pvcs`: List persistent volume claims with optional `?namespace=` filter.
+- `GET /api/storage/pvcs/:namespace/:name`: Detailed PVC spec, status, and related pod/PV bindings.
+- `GET /api/storage/pvs`: List persistent volumes.
+- `GET /api/storage/pvs/:name`: Detailed PV spec, status, source driver, and claim references.
+- `GET /api/storage/storageclasses`: List storage classes with provisioners and parameters.
+- `GET /api/storage/volumeattachments`: List CSI volume attachments with node and volume associations.
+- `GET /api/storage/csinodes`: List CSI storage node driver registrations.
+
+## 22. RBAC Management & Architecture
+
+### 22.1 Independent Top-Level Navigation
+RBAC is implemented as an independent, first-class top-level section in the dashboard (`/rbac`) with the following core views:
+1. **Roles & RoleBindings**: Namespace-scoped access control rules and subject assignments.
+2. **ClusterRoles & ClusterRoleBindings**: Cluster-scoped roles and system-wide privileges.
+3. **ServiceAccounts**: Identity tokens and image pull secret bindings.
+4. **Declarative Rule Breakdown**: Visual representation of API Groups, Resources, Resource Names, Non-Resource URLs, and Verbs.
+
+### 22.2 RBAC Endpoints
+- `GET /api/rbac/roles`: List namespace-scoped Roles.
+- `GET /api/rbac/roles/:namespace/:name`: Detailed Role rules and bindings.
+- `GET /api/rbac/clusterroles`: List ClusterRoles.
+- `GET /api/rbac/clusterroles/:name`: Detailed ClusterRole rules and aggregation rules.
+- `GET /api/rbac/rolebindings`: List RoleBindings.
+- `GET /api/rbac/rolebindings/:namespace/:name`: Detailed RoleBinding subject references and roleRef.
+- `GET /api/rbac/clusterrolebindings`: List ClusterRoleBindings.
+- `GET /api/rbac/clusterrolebindings/:name`: Detailed ClusterRoleBinding subject mappings.
+- `GET /api/rbac/serviceaccounts`: List ServiceAccounts.
+- `GET /api/rbac/serviceaccounts/:namespace/:name`: Detailed ServiceAccount secrets and assigned bindings.
+
+## 23. Advanced RBAC Analysis Architecture
+
+### 23.1 High-Performance Batch Analysis Engine
+The Advanced RBAC Analysis feature resolves complex multi-hop Kubernetes authorization models in a single server-side pass:
+- **Unified Batch Endpoint**: `GET /api/rbac/analysis` fetches `ServiceAccounts`, `Roles`, `RoleBindings`, `ClusterRoles`, and `ClusterRoleBindings` in parallel across the active cluster in <150ms.
+- **Permission Matrix Resolution**: Flattens all declared RBAC rules into an indexed, filterable matrix mapping `Subject -> Scope -> API Group -> Resource -> Resource Names -> Verbs -> Source Binding -> Source Role`.
+- **Zero N+1 API Calls**: Complete client-side filtering and real-time search without additional network round-trips.
+
+### 23.2 Analysis Capabilities
+1. **Permission Matrix**: Multi-column matrix supporting instant search, verb badges, namespace scope filtering, and source binding provenance.
+2. **Subject Access View**: User, Group, or ServiceAccount-centric view displaying all attached RoleBindings, ClusterRoleBindings, referenced Roles, and resolved permission rules.
+3. **Resource Access View**: Reverse permission query allowing selection of Namespace, API Group, Resource, and Verb to instantly list all matching RBAC rules and authorized subjects.
+4. **Effective Permissions View**: Deduplicated effective rule resolver for any selected subject, grouping permissions by API Group & Resource with explicit source binding attribution and factual disclaimers.
+5. **Global RBAC Search**: High-speed search filtering across subjects, bindings, roles, API groups, resource names, and verbs.
+6. **Configuration Indicators**: Factually surfaces Kubernetes configuration patterns (wildcard `*` API groups, resources, verbs, `cluster-admin` bindings, non-resource URLs, SA bindings, User/Group bindings) without arbitrary risk scores or rankings.
+7. **Relationship Graph**: Interactive visual flow connecting `Subject` -> `Binding` -> `Role` -> `Rules`.
+
+## 24. License
 
 The project declares the MIT license in `package.json`.
 

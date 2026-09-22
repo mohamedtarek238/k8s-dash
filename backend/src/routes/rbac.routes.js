@@ -10,8 +10,9 @@ const {
 } = require('../middleware/validate');
 const { asyncHandler } = require('../utils/asyncHandler');
 
-// Overview
+// Overview & Analysis
 router.get('/overview', asyncHandler(rbacController.getRBACOverview));
+router.get('/analysis', asyncHandler(rbacController.getRBACAnalysis));
 
 // Service Accounts
 router.get(

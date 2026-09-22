@@ -560,8 +560,260 @@ async function getClusterRoleBindingDetails(name, clients, { includeRelated = fa
   };
 }
 
+
+// ---------------------------------------------------------------------------
+// Advanced RBAC Analysis
+// ---------------------------------------------------------------------------
+
+async function getRBACAnalysis(clients) {
+  const { coreV1Api, rbacAuthorizationV1Api } = clients;
+
+  const [saRes, rolesRes, rbRes, crRes, crbRes] = await Promise.allSettled([
+    coreV1Api.listServiceAccountForAllNamespaces(),
+    rbacAuthorizationV1Api.listRoleForAllNamespaces(),
+    rbacAuthorizationV1Api.listRoleBindingForAllNamespaces(),
+    rbacAuthorizationV1Api.listClusterRole(),
+    rbacAuthorizationV1Api.listClusterRoleBinding(),
+  ]);
+
+  const sas = saRes.status === 'fulfilled' ? (getResponseBody(saRes.value).items || []).map(mapServiceAccountSummary) : [];
+  const roles = rolesRes.status === 'fulfilled' ? (getResponseBody(rolesRes.value).items || []).map(mapRoleSummary) : [];
+  const rbs = rbRes.status === 'fulfilled' ? (getResponseBody(rbRes.value).items || []).map(mapRoleBindingSummary) : [];
+  const crs = crRes.status === 'fulfilled' ? (getResponseBody(crRes.value).items || []).map(mapClusterRoleSummary) : [];
+  const crbs = crbRes.status === 'fulfilled' ? (getResponseBody(crbRes.value).items || []).map(mapClusterRoleBindingSummary) : [];
+
+  // Index roles for fast lookup
+  const rolesMap = new Map();
+  for (const role of roles) {
+    rolesMap.set(`${role.namespace}/${role.name}`, role);
+  }
+
+  const clusterRolesMap = new Map();
+  for (const cr of crs) {
+    clusterRolesMap.set(cr.name, cr);
+  }
+
+  // Collect unique subjects
+  const subjectsMap = new Map();
+  const allNamespaces = new Set();
+
+  for (const sa of sas) {
+    const key = `ServiceAccount:${sa.namespace}:${sa.name}`;
+    subjectsMap.set(key, {
+      kind: 'ServiceAccount',
+      name: sa.name,
+      namespace: sa.namespace,
+      display: `${sa.namespace}/${sa.name}`,
+    });
+    allNamespaces.add(sa.namespace);
+  }
+
+  const registerSubject = (sub, defaultNs = null) => {
+    const ns = sub.namespace || defaultNs;
+    const key = `${sub.kind}:${ns || ''}:${sub.name}`;
+    if (!subjectsMap.has(key)) {
+      subjectsMap.set(key, {
+        kind: sub.kind,
+        name: sub.name,
+        namespace: ns,
+        display: ns ? `${ns}/${sub.name}` : sub.name,
+      });
+    }
+    if (ns) allNamespaces.add(ns);
+  };
+
+  for (const rb of rbs) {
+    allNamespaces.add(rb.namespace);
+    for (const sub of rb.subjects) {
+      registerSubject(sub, sub.kind === 'ServiceAccount' ? rb.namespace : null);
+    }
+  }
+
+  for (const crb of crbs) {
+    for (const sub of crb.subjects) {
+      registerSubject(sub, null);
+    }
+  }
+
+  // Build flattened permission matrix
+  const permissionMatrix = [];
+
+  for (const rb of rbs) {
+    let referencedRules = [];
+    if (rb.roleRef.kind === 'Role') {
+      const role = rolesMap.get(`${rb.namespace}/${rb.roleRef.name}`);
+      if (role) referencedRules = role.rules;
+    } else if (rb.roleRef.kind === 'ClusterRole') {
+      const cr = clusterRolesMap.get(rb.roleRef.name);
+      if (cr) referencedRules = cr.rules;
+    }
+
+    for (const sub of rb.subjects) {
+      const subNs = sub.namespace || (sub.kind === 'ServiceAccount' ? rb.namespace : null);
+      for (const rule of referencedRules) {
+        permissionMatrix.push({
+          subject: {
+            kind: sub.kind,
+            name: sub.name,
+            namespace: subNs,
+            display: subNs ? `${subNs}/${sub.name}` : sub.name,
+          },
+          binding: {
+            kind: 'RoleBinding',
+            name: rb.name,
+            namespace: rb.namespace,
+          },
+          role: {
+            kind: rb.roleRef.kind,
+            name: rb.roleRef.name,
+            namespace: rb.roleRef.kind === 'Role' ? rb.namespace : null,
+          },
+          scope: rb.namespace,
+          isClusterScoped: false,
+          apiGroups: rule.apiGroups || [],
+          resources: rule.resources || [],
+          resourceNames: rule.resourceNames || [],
+          verbs: rule.verbs || [],
+          nonResourceURLs: rule.nonResourceURLs || [],
+        });
+      }
+    }
+  }
+
+  for (const crb of crbs) {
+    const cr = clusterRolesMap.get(crb.roleRef.name);
+    const referencedRules = cr ? cr.rules : [];
+
+    for (const sub of crb.subjects) {
+      const subNs = sub.namespace;
+      for (const rule of referencedRules) {
+        permissionMatrix.push({
+          subject: {
+            kind: sub.kind,
+            name: sub.name,
+            namespace: subNs,
+            display: subNs ? `${subNs}/${sub.name}` : sub.name,
+          },
+          binding: {
+            kind: 'ClusterRoleBinding',
+            name: crb.name,
+            namespace: null,
+          },
+          role: {
+            kind: 'ClusterRole',
+            name: crb.roleRef.name,
+            namespace: null,
+          },
+          scope: 'Cluster-Wide',
+          isClusterScoped: true,
+          apiGroups: rule.apiGroups || [],
+          resources: rule.resources || [],
+          resourceNames: rule.resourceNames || [],
+          verbs: rule.verbs || [],
+          nonResourceURLs: rule.nonResourceURLs || [],
+        });
+      }
+    }
+  }
+
+  // Factual Pattern Indicators
+  const wildcardApiGroupRoles = [];
+  const wildcardResourceRoles = [];
+  const wildcardVerbRoles = [];
+  const nonResourceUrlRoles = [];
+
+  const checkRoleRules = (roleObj, kind) => {
+    let hasWcApi = false;
+    let hasWcRes = false;
+    let hasWcVerb = false;
+    let hasNonRes = false;
+
+    for (const rule of roleObj.rules || []) {
+      if ((rule.apiGroups || []).includes('*')) hasWcApi = true;
+      if ((rule.resources || []).includes('*')) hasWcRes = true;
+      if ((rule.verbs || []).includes('*')) hasWcVerb = true;
+      if ((rule.nonResourceURLs || []).length > 0) hasNonRes = true;
+    }
+
+    const item = { kind, name: roleObj.name, namespace: roleObj.namespace || null, isSystem: Boolean(roleObj.isSystem) };
+    if (hasWcApi) wildcardApiGroupRoles.push(item);
+    if (hasWcRes) wildcardResourceRoles.push(item);
+    if (hasWcVerb) wildcardVerbRoles.push(item);
+    if (hasNonRes) nonResourceUrlRoles.push(item);
+  };
+
+  for (const r of roles) checkRoleRules(r, 'Role');
+  for (const cr of crs) checkRoleRules(cr, 'ClusterRole');
+
+  // cluster-admin bindings
+  const clusterAdminBindings = [
+    ...rbs.filter((r) => r.roleRef.name === 'cluster-admin').map((r) => ({ kind: 'RoleBinding', name: r.name, namespace: r.namespace, subjectsCount: r.subjectsCount })),
+    ...crbs.filter((r) => r.roleRef.name === 'cluster-admin').map((r) => ({ kind: 'ClusterRoleBinding', name: r.name, namespace: null, subjectsCount: r.subjectsCount })),
+  ];
+
+  // Subject target bindings
+  const saBindings = [
+    ...rbs.filter((r) => r.subjects.some((s) => s.kind === 'ServiceAccount')).map((r) => ({ kind: 'RoleBinding', name: r.name, namespace: r.namespace })),
+    ...crbs.filter((r) => r.subjects.some((s) => s.kind === 'ServiceAccount')).map((r) => ({ kind: 'ClusterRoleBinding', name: r.name, namespace: null })),
+  ];
+
+  const userGroupBindings = [
+    ...rbs.filter((r) => r.subjects.some((s) => s.kind === 'User' || s.kind === 'Group')).map((r) => ({ kind: 'RoleBinding', name: r.name, namespace: r.namespace })),
+    ...crbs.filter((r) => r.subjects.some((s) => s.kind === 'User' || s.kind === 'Group')).map((r) => ({ kind: 'ClusterRoleBinding', name: r.name, namespace: null })),
+  ];
+
+  const indicators = {
+    wildcardApiGroups: {
+      count: wildcardApiGroupRoles.length,
+      roles: wildcardApiGroupRoles,
+    },
+    wildcardResources: {
+      count: wildcardResourceRoles.length,
+      roles: wildcardResourceRoles,
+    },
+    wildcardVerbs: {
+      count: wildcardVerbRoles.length,
+      roles: wildcardVerbRoles,
+    },
+    clusterAdminBindings: {
+      count: clusterAdminBindings.length,
+      bindings: clusterAdminBindings,
+    },
+    nonResourceUrls: {
+      count: nonResourceUrlRoles.length,
+      roles: nonResourceUrlRoles,
+    },
+    serviceAccountBindings: {
+      count: saBindings.length,
+      bindings: saBindings,
+    },
+    userGroupBindings: {
+      count: userGroupBindings.length,
+      bindings: userGroupBindings,
+    },
+  };
+
+  return {
+    subjects: Array.from(subjectsMap.values()),
+    roles,
+    clusterRoles: crs,
+    roleBindings: rbs,
+    clusterRoleBindings: crbs,
+    permissionMatrix,
+    indicators,
+    namespaces: Array.from(allNamespaces).sort(),
+    summary: {
+      totalSubjects: subjectsMap.size,
+      totalPermissionEntries: permissionMatrix.length,
+      totalRoles: roles.length + crs.length,
+      totalBindings: rbs.length + crbs.length,
+    },
+  };
+}
+
 module.exports = {
   getRBACOverview,
+  getRBACAnalysis,
   listServiceAccounts,
   getServiceAccountDetails,
   listRoles,

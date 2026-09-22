@@ -139,6 +139,7 @@ export const api = {
   volumeSnapshotContents: () => data('/api/storage/volumesnapshotcontents'),
   volumeSnapshotContent: (name) => data(`/api/storage/volumesnapshotcontents/${encodeURIComponent(name)}`),
   rbacOverview: () => data('/api/rbac/overview'),
+  rbacAnalysis: () => data('/api/rbac/analysis'),
   serviceAccounts: (namespace, params = {}) => {
     const query = new URLSearchParams();
     if (params.search) query.set('search', params.search);

@@ -7,6 +7,11 @@ async function getRBACOverview(req, res) {
   return sendSuccess(res, data);
 }
 
+async function getRBACAnalysis(req, res) {
+  const data = await rbacService.getRBACAnalysis(req.k8sClients);
+  return sendSuccess(res, data);
+}
+
 // ---------------------------------------------------------------------------
 // Service Accounts
 // ---------------------------------------------------------------------------
@@ -189,6 +194,7 @@ async function getClusterRoleBindingYaml(req, res) {
 
 module.exports = {
   getRBACOverview,
+  getRBACAnalysis,
   getServiceAccounts,
   getServiceAccountDetails,
   getServiceAccountYaml,
