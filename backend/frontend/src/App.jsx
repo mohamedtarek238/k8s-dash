@@ -2531,7 +2531,7 @@ function RBACRuleTable({ rules }) {
 
 function RBACRelationshipFlow() {
   return (
-    <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.06)' }}>
+    <div style={{ padding: '16px', background: 'var(--panel-2)', borderRadius: '8px', border: '1px solid var(--border)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
         <div style={{ flex: '1', minWidth: '160px', padding: '12px', background: 'rgba(56, 189, 248, 0.08)', borderRadius: '6px', border: '1px solid rgba(56, 189, 248, 0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
@@ -3017,7 +3017,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
 
           {activeSubject ? (
             <div>
-              <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '16px' }}>
+              <div style={{ padding: '16px', background: 'var(--panel-2)', borderRadius: '8px', border: '1px solid var(--border)', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <Box size={22} color="#38bdf8" />
@@ -3131,7 +3131,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px', alignItems: 'start' }}>
-            <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ background: 'var(--panel-2)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <strong style={{ fontSize: '13px' }}>Matching Subjects</strong>
                 <Badge tone="info">{distinctMatchingSubjects.length}</Badge>
@@ -3327,7 +3327,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
             <Empty title="Type a search query" text="Search across ServiceAccounts, Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, and permissions." />
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ background: 'var(--panel-2)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <strong><Box size={14} /> Service Accounts</strong>
                   <Badge tone="info">{globalMatches.serviceAccounts.length}</Badge>
@@ -3343,7 +3343,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
                 </div>
               </div>
 
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ background: 'var(--panel-2)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <strong><Shield size={14} /> Roles & ClusterRoles</strong>
                   <Badge tone="info">{globalMatches.roles.length + globalMatches.clusterRoles.length}</Badge>
@@ -3365,7 +3365,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
                 </div>
               </div>
 
-              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ background: 'var(--panel-2)', padding: '14px', borderRadius: '8px', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                   <strong><Network size={14} /> Bindings</strong>
                   <Badge tone="info">{globalMatches.roleBindings.length + globalMatches.clusterRoleBindings.length}</Badge>
@@ -3394,7 +3394,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
       {/* 6. CONFIGURATION INDICATORS */}
       {viewMode === 'indicators' && (
         <div>
-          <div style={{ padding: '12px 16px', background: 'rgba(255, 255, 255, 0.02)', borderRadius: '6px', border: '1px solid rgba(255, 255, 255, 0.06)', marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
+          <div style={{ padding: '12px 16px', background: 'var(--panel-2)', borderRadius: '6px', border: '1px solid var(--border)', marginBottom: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
             <strong>Factual Configuration Patterns:</strong> Objective patterns discovered across declared RBAC objects in this cluster.
           </div>
 
@@ -3548,7 +3548,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
                 {subjectRoleBindings.map((rb, i) => (
-                  <div key={i} style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div key={i} style={{ padding: '14px', background: 'var(--panel-2)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#c084fc', marginBottom: '6px' }}>
                       <Network size={16} />
                       <strong>RoleBinding: {rb.name}</strong>
@@ -3556,7 +3556,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
                       Namespace: {rb.namespace} · Target Role: <strong style={{ color: '#fbbf24' }}>{rb.roleRef?.kind}/{rb.roleRef?.name}</strong>
                     </div>
-                    <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px' }}>
+                    <div style={{ padding: '8px', background: 'var(--panel-2)', borderRadius: '4px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Rules granted via this binding</span>
                       <div style={{ marginTop: '4px', fontSize: '12px' }}>
                         {(permissionMatrix || []).filter((e) => e.binding?.name === rb.name).map((e, idx) => (
@@ -3571,7 +3571,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
                 ))}
 
                 {subjectClusterRoleBindings.map((crb, i) => (
-                  <div key={i} style={{ padding: '14px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div key={i} style={{ padding: '14px', background: 'var(--panel-2)', borderRadius: '8px', border: '1px solid var(--border)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#c084fc', marginBottom: '6px' }}>
                       <Network size={16} />
                       <strong>ClusterRoleBinding: {crb.name}</strong>
@@ -3579,7 +3579,7 @@ function RBACAdvancedAnalysis({ data, loading, error, reload, onSelectSA, onSele
                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
                       Cluster-Wide · Target Role: <strong style={{ color: '#fbbf24' }}>ClusterRole/{crb.roleRef?.name}</strong>
                     </div>
-                    <div style={{ padding: '8px', background: 'rgba(255,255,255,0.02)', borderRadius: '4px' }}>
+                    <div style={{ padding: '8px', background: 'var(--panel-2)', borderRadius: '4px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Rules granted via this binding</span>
                       <div style={{ marginTop: '4px', fontSize: '12px' }}>
                         {(permissionMatrix || []).filter((e) => e.binding?.name === crb.name).map((e, idx) => (
@@ -4499,7 +4499,24 @@ function getPageFromLocation() {
 
 function App() {
   const [page, setPage] = useState(getPageFromLocation);
-  const [dark, setDark] = useState(true);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('k8s-dashboard-theme');
+    if (saved !== null) return saved === 'dark';
+    return true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('k8s-dashboard-theme', dark ? 'dark' : 'light');
+    if (dark) {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+      document.documentElement.setAttribute('data-theme', 'dark');
+    } else {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  }, [dark]);
   const [collapsed, setCollapsed] = useState(false);
   const [selected, setSelected] = useState(null);
   const [currentCluster, setCurrentCluster] = useState(() => api.getCluster());
@@ -4613,7 +4630,7 @@ function App() {
   };
 
   return (
-    <div className={dark ? 'app dark' : 'app'}>
+    <div className={dark ? 'app dark' : 'app light'}>
       <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
         <div className="brand">
           <div className="brand-mark"><Zap size={19} /></div>
