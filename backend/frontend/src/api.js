@@ -1,11 +1,24 @@
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5100').replace(/\/$/, '');
 
-let currentClusterId = localStorage.getItem('k8s-dashboard-cluster') || null;
+function toCanonicalClusterId(val) {
+  if (!val) return null;
+  if (Array.isArray(val)) return toCanonicalClusterId(val[0]);
+  if (typeof val === 'object' && val !== null) return toCanonicalClusterId(val.id);
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (trimmed.includes(',')) return trimmed.split(',')[0].trim();
+    return trimmed || null;
+  }
+  return null;
+}
+
+let currentClusterId = toCanonicalClusterId(localStorage.getItem('k8s-dashboard-cluster')) || null;
 
 function setCluster(clusterId) {
-  currentClusterId = clusterId;
-  if (clusterId) {
-    localStorage.setItem('k8s-dashboard-cluster', clusterId);
+  const canonical = toCanonicalClusterId(clusterId);
+  currentClusterId = canonical;
+  if (canonical) {
+    localStorage.setItem('k8s-dashboard-cluster', canonical);
   } else {
     localStorage.removeItem('k8s-dashboard-cluster');
   }
@@ -16,9 +29,24 @@ function getCluster() {
 }
 
 function appendClusterParam(path) {
-  if (!currentClusterId) return path;
-  const separator = path.includes('?') ? '&' : '?';
-  return `${path}${separator}cluster=${encodeURIComponent(currentClusterId)}`;
+  const [pathname, search = ''] = path.split('?');
+  const params = new URLSearchParams(search);
+
+  // If cluster is already specified in the path, normalize it and do NOT append another one
+  if (params.has('cluster')) {
+    const existing = params.get('cluster');
+    const canonical = toCanonicalClusterId(existing);
+    if (canonical) {
+      params.set('cluster', canonical);
+    } else if (currentClusterId) {
+      params.set('cluster', currentClusterId);
+    }
+  } else if (currentClusterId) {
+    params.set('cluster', currentClusterId);
+  }
+
+  const queryStr = params.toString();
+  return queryStr ? `${pathname}?${queryStr}` : pathname;
 }
 
 async function request(path, options = {}) {
@@ -175,6 +203,25 @@ export const api = {
     return list(`/api/rbac/clusterrolebindings${query.toString() ? `?${query}` : ''}`);
   },
   clusterRoleBinding: (name) => data(`/api/rbac/clusterrolebindings/${encodeURIComponent(name)}?includeRelated=true`),
+  auditStatus: (cluster) => {
+    const cId = toCanonicalClusterId(cluster) || currentClusterId;
+    return data(cId ? `/api/audit/status?cluster=${encodeURIComponent(cId)}` : '/api/audit/status');
+  },
+  auditEvents: (params = {}) => {
+    const query = new URLSearchParams();
+    const cId = toCanonicalClusterId(params.cluster) || currentClusterId;
+    if (cId) query.set('cluster', cId);
+    if (params.namespace && params.namespace !== 'all') query.set('namespace', params.namespace);
+    if (params.search) query.set('search', params.search);
+    if (params.verb && params.verb !== 'all') query.set('verb', params.verb);
+    if (params.resource && params.resource !== 'all') query.set('resource', params.resource);
+    if (params.apiGroup && params.apiGroup !== 'all') query.set('apiGroup', params.apiGroup);
+    if (params.user) query.set('user', params.user);
+    if (params.status && params.status !== 'all') query.set('status', params.status);
+    if (params.limit) query.set('limit', params.limit);
+    if (params.offset !== undefined && params.offset !== null) query.set('offset', params.offset);
+    return data(`/api/audit/events${query.toString() ? `?${query}` : ''}`);
+  },
   yaml: (resourceType, namespace, name) => {
     const pluralMap = {
       pod: 'pods',

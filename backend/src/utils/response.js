@@ -1,8 +1,12 @@
-function sendSuccess(res, data, statusCode = 200) {
-  return res.status(statusCode).json({
+function sendSuccess(res, data, statusCode = 200, meta = null) {
+  const payload = {
     success: true,
     data,
-  });
+  };
+  if (meta && typeof meta === 'object') {
+    payload.meta = meta;
+  }
+  return res.status(statusCode).json(payload);
 }
 
 function sendList(res, data, meta = {}) {

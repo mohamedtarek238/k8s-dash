@@ -159,6 +159,23 @@ const customResourceClusterParamsSchema = z.object({
   name: z.string().trim().min(1),
 });
 
+const auditQuerySchema = z.object({
+  cluster: z.preprocess((val) => {
+    if (Array.isArray(val)) return val[0];
+    if (typeof val === 'string' && val.includes(',')) return val.split(',')[0].trim();
+    return val;
+  }, z.string().trim().min(1).optional()),
+  namespace: z.string().trim().min(1).optional(),
+  search: z.string().trim().optional(),
+  verb: z.string().trim().optional(),
+  resource: z.string().trim().optional(),
+  apiGroup: z.string().trim().optional(),
+  user: z.string().trim().optional(),
+  status: z.enum(['allowed', 'denied', 'Allowed', 'Denied', 'all', 'All']).optional(),
+  limit: z.coerce.number().int().positive().max(500).optional().default(50),
+  offset: z.coerce.number().int().nonnegative().optional().default(0),
+});
+
 module.exports = {
   namespaceQuerySchema,
   podLogsQuerySchema,
@@ -178,6 +195,7 @@ module.exports = {
   customResourceListQuerySchema,
   customResourceNamespacedParamsSchema,
   customResourceClusterParamsSchema,
+  auditQuerySchema,
   validate,
 };
 

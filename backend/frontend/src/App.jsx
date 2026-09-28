@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowDown, Blocks, Box, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Clock, Copy, Cpu, Database,
   ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, Menu, Moon, Network,
-  Package, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Route, Search, Server, Settings2, Shield, Sun, Terminal,
+  Package, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Route, Search, Server, Settings2, Shield, ShieldAlert, Sun, Terminal,
   X, Zap
 } from 'lucide-react';
 
@@ -22,6 +22,7 @@ const nav = [
   { key: 'rbac', label: 'RBAC', icon: Shield },
   { key: 'operators', label: 'Operators & CRDs', icon: Blocks },
   { key: 'events', label: 'Events', icon: Activity },
+  { key: 'audit', label: 'Audit & Activity', icon: ShieldAlert },
 ];
 
 const formatDate = (value) => value ? new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : '—';
@@ -73,13 +74,30 @@ function ClusterSwitcher({ clusterId, onClusterChange }) {
 
   const current = items.find((c) => c.id === clusterId) || items.find((c) => c.isDefault) || items[0];
 
-  const handleSelect = (id) => {
+  const handleSelect = (selected) => {
     setOpen(false);
-    if (id !== clusterId) {
+    const id = typeof selected === 'object' && selected !== null
+      ? selected.id
+      : typeof selected === 'string' && selected.includes(',')
+      ? selected.split(',')[0].trim()
+      : typeof selected === 'string'
+      ? selected.trim()
+      : selected;
+    if (id && id !== clusterId) {
       api.setCluster(id);
       onClusterChange(id);
     }
   };
+
+  useEffect(() => {
+    if (!clusterId && items.length > 0) {
+      const defaultItem = items.find((c) => c.isDefault) || items[0];
+      if (defaultItem?.id) {
+        api.setCluster(defaultItem.id);
+        onClusterChange(defaultItem.id);
+      }
+    }
+  }, [clusterId, items]);
 
   if (!items.length) return null;
 
@@ -5327,6 +5345,448 @@ function ClusterRoleBindingDetail({ clusterRoleBinding, onClose, onSelectSA, onS
 }
 
 
+function AuditDetail({ event, onClose }) {
+  const [tab, setTab] = useState('overview');
+  const [copied, setCopied] = useState(false);
+
+  if (!event) return null;
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(JSON.stringify(event.rawEvent || event, null, 2));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="backdrop" onClick={onClose}>
+      <aside className="detail-panel" onClick={(e) => e.stopPropagation()}>
+        <button className="close-button" onClick={onClose}><X size={18} /></button>
+        <span className="eyebrow">Audit Record Detail</span>
+        <h2>{(event.verb || '').toUpperCase()} {event.resource || 'Resource'}</h2>
+
+        <div className="detail-tabs">
+          <button className={`detail-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>
+            Overview
+          </button>
+          <button className={`detail-tab ${tab === 'json' ? 'active' : ''}`} onClick={() => setTab('json')}>
+            <FileCode size={14} /> Raw JSON
+          </button>
+        </div>
+
+        {tab === 'overview' ? (
+          <>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className={`audit-status-badge ${event.allowed ? 'allowed' : 'denied'}`}>
+                <span className="badge-dot" />
+                {event.allowed ? `Allowed (${event.statusCode || event.responseStatus || 200})` : `Denied (${event.statusCode || event.responseStatus || 403})`}
+              </span>
+              <Badge tone={event.verb === 'create' ? 'success' : event.verb === 'delete' ? 'danger' : 'info'}>
+                {event.verb}
+              </Badge>
+              {event.level && <Badge tone="muted">Level: {event.level}</Badge>}
+            </div>
+
+            <KeyValues
+              values={{
+                'Audit ID': event.auditID || event.id,
+                Timestamp: formatDate(event.timestamp),
+                'Exact ISO Time': event.timestamp,
+                User: event.user,
+                'User Groups': (event.groups || []).join(', ') || '—',
+                Verb: event.verb,
+                'API Group': event.apiGroup || 'core (v1)',
+                Resource: event.resource,
+                Namespace: event.namespace || 'Cluster-Scoped',
+                'Resource Name': event.resourceName || '—',
+                'Response Code': event.statusCode || event.responseStatus,
+                'Stage': event.stage || '—',
+                'Source IP': event.sourceIP || (event.sourceIPs && event.sourceIPs[0]) || '—',
+                'User Agent': event.userAgent || '—',
+              }}
+            />
+
+            <h3>Request URI</h3>
+            <div className="raw-json-box" style={{ padding: '10px 12px', fontSize: '11px', maxHeight: '80px', marginBottom: '16px' }}>
+              {event.requestURI || '—'}
+            </div>
+
+            {event.rawEvent?.responseStatus?.message && (
+              <>
+                <h3>Status Message</h3>
+                <div style={{ padding: '10px 12px', borderRadius: '6px', background: 'rgba(220, 38, 38, 0.1)', color: 'var(--danger)', fontSize: '12px', lineHeight: 1.5, marginBottom: '16px' }}>
+                  {event.rawEvent.responseStatus.message}
+                </div>
+              </>
+            )}
+          </>
+        ) : (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+              <button className="button subtle small" onClick={handleCopyJson}>
+                {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+                <span>{copied ? 'Copied JSON' : 'Copy JSON'}</span>
+              </button>
+            </div>
+            <pre className="raw-json-box">
+              {JSON.stringify(event.rawEvent || event, null, 2)}
+            </pre>
+          </div>
+        )}
+      </aside>
+    </div>
+  );
+}
+
+function AuditView({ onSelectEvent, currentCluster }) {
+  const canonicalCluster = typeof currentCluster === 'object' && currentCluster !== null
+    ? currentCluster.id
+    : typeof currentCluster === 'string' && currentCluster.includes(',')
+    ? currentCluster.split(',')[0].trim()
+    : typeof currentCluster === 'string'
+    ? currentCluster.trim()
+    : currentCluster;
+
+  const [search, setSearch] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [verb, setVerb] = useState('');
+  const [status, setStatus] = useState('');
+  const [resource, setResource] = useState('');
+  const [user, setUser] = useState('');
+  const [limit, setLimit] = useState(50);
+  const [offset, setOffset] = useState(0);
+
+  const statusResource = useResource(() => api.auditStatus(canonicalCluster), [canonicalCluster]);
+  const statusData = statusResource.data?.data || statusResource.data || {};
+
+  const queryParams = useMemo(() => ({
+    cluster: canonicalCluster || undefined,
+    search: search.trim() || undefined,
+    namespace: namespace.trim() || undefined,
+    verb: verb || undefined,
+    status: status || undefined,
+    resource: resource.trim() || undefined,
+    user: user.trim() || undefined,
+    limit,
+    offset,
+  }), [currentCluster, search, namespace, verb, status, resource, user, limit, offset]);
+
+  const resourceData = useResource(() => api.auditEvents(queryParams), [queryParams]);
+  const data = resourceData.data?.data || resourceData.data || {};
+  const isAvailable = data.available !== false;
+  const summary = data.summary || { total: 0, creates: 0, updates: 0, deletes: 0, denied: 0 };
+  const events = data.events || [];
+  const total = data.total || 0;
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setNamespace('');
+    setVerb('');
+    setStatus('');
+    setResource('');
+    setUser('');
+    setOffset(0);
+  };
+
+  const getVerbBadge = (v) => {
+    const vLower = (v || '').toLowerCase();
+    if (vLower === 'create') return <Badge tone="success">{v}</Badge>;
+    if (['update', 'patch'].includes(vLower)) return <Badge tone="info">{v}</Badge>;
+    if (vLower === 'delete') return <Badge tone="danger">{v}</Badge>;
+    if (['get', 'list', 'watch'].includes(vLower)) return <Badge tone="purple">{v}</Badge>;
+    return <Badge tone="muted">{v}</Badge>;
+  };
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="Security & Governance"
+        title="Audit & Activity"
+        description="Immutable Kubernetes audit trails capturing every API server interaction, authenticated user, and authorization decision."
+        action={
+          <button className="button subtle" onClick={resourceData.reload}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        }
+      />
+
+      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <Metric
+          icon={Shield}
+          label="Total Activities"
+          value={isAvailable ? summary.total : '—'}
+          detail="Recorded API requests"
+          accent="blue"
+        />
+        <Metric
+          icon={Box}
+          label="Creates"
+          value={isAvailable ? summary.creates : '—'}
+          detail="Resource additions"
+          accent="teal"
+        />
+        <Metric
+          icon={RefreshCw}
+          label="Updates & Patches"
+          value={isAvailable ? summary.updates : '—'}
+          detail="Mutated resources"
+          accent="amber"
+        />
+        <Metric
+          icon={AlertTriangle}
+          label="Deletes"
+          value={isAvailable ? summary.deletes : '—'}
+          detail="Resource removals"
+          accent="coral"
+        />
+        <Metric
+          icon={ShieldAlert}
+          label="Denied Requests"
+          value={isAvailable ? summary.denied : '—'}
+          detail="Forbidden / unauthorized"
+          accent="purple"
+        />
+      </div>
+
+      {!isAvailable && (
+        <div className="audit-callout-card">
+          <div className="audit-callout-icon">
+            <ShieldAlert size={24} />
+          </div>
+          <div className="audit-callout-content">
+            <div className="audit-callout-title">
+              Audit Logs Unavailable for this cluster {data.reason ? `(${data.reason})` : ''}
+            </div>
+            <div className="audit-callout-desc">
+              {data.message || 'Audit Logs are not available in this cluster/environment. Kubernetes Events can still be viewed separately through the existing Events section.'}
+            </div>
+            <div className="audit-callout-hint">
+              <strong>Technical Notice:</strong> Kubernetes API server audit logs are file/webhook-based and not exposed by default over the standard HTTP API. To enable dashboard log ingestion, configure <code>KUBERNETES_AUDIT_LOG_PATH</code> (or <code>KUBERNETES_AUDIT_LOG_PATH_&lt;CLUSTER_ID&gt;</code>) in the backend environment pointing to your cluster audit log file.
+            </div>
+            <a
+              href="#events"
+              className="button primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              onClick={() => { window.location.hash = 'events'; }}
+            >
+              <Activity size={16} /> View Kubernetes Events
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className="audit-filter-bar">
+        <div className="search" style={{ flex: '1 1 220px' }}>
+          <Search size={16} />
+          <input
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setOffset(0); }}
+            placeholder="Search user, resource, verb, URI..."
+          />
+        </div>
+
+        <div className="audit-filter-item">
+          <label>Namespace</label>
+          <input
+            className="select"
+            style={{ width: '130px' }}
+            value={namespace}
+            onChange={(e) => { setNamespace(e.target.value); setOffset(0); }}
+            placeholder="All namespaces"
+          />
+        </div>
+
+        <div className="audit-filter-item">
+          <label>Verb</label>
+          <select
+            className="select"
+            style={{ width: '115px' }}
+            value={verb}
+            onChange={(e) => { setVerb(e.target.value); setOffset(0); }}
+          >
+            <option value="">All Verbs</option>
+            <option value="create">create</option>
+            <option value="update">update</option>
+            <option value="patch">patch</option>
+            <option value="delete">delete</option>
+            <option value="get">get</option>
+            <option value="list">list</option>
+            <option value="watch">watch</option>
+          </select>
+        </div>
+
+        <div className="audit-filter-item">
+          <label>Status</label>
+          <select
+            className="select"
+            style={{ width: '115px' }}
+            value={status}
+            onChange={(e) => { setStatus(e.target.value); setOffset(0); }}
+          >
+            <option value="">All Statuses</option>
+            <option value="allowed">Allowed</option>
+            <option value="denied">Denied</option>
+          </select>
+        </div>
+
+        <div className="audit-filter-item">
+          <label>Resource</label>
+          <input
+            className="select"
+            style={{ width: '120px' }}
+            value={resource}
+            onChange={(e) => { setResource(e.target.value); setOffset(0); }}
+            placeholder="e.g. pods, secrets"
+          />
+        </div>
+
+        <div className="audit-filter-item">
+          <label>User</label>
+          <input
+            className="select"
+            style={{ width: '120px' }}
+            value={user}
+            onChange={(e) => { setUser(e.target.value); setOffset(0); }}
+            placeholder="e.g. admin, alice"
+          />
+        </div>
+
+        <button
+          className="button subtle small"
+          onClick={handleClearFilters}
+          title="Clear all filters"
+        >
+          Clear Filters
+        </button>
+      </div>
+
+      {resourceData.loading ? (
+        <Loading rows={8} />
+      ) : resourceData.error ? (
+        <ErrorState error={resourceData.error} reload={resourceData.reload} />
+      ) : !isAvailable ? null : (
+        <>
+          <Table
+            rows={events}
+            onRow={onSelectEvent}
+            emptyTitle="No audit records match the current filters"
+            columns={[
+              {
+                key: 'timestamp',
+                label: 'Timestamp',
+                render: (r) => (
+                  <div style={{ whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600 }}>{formatDate(r.timestamp)}</span>
+                    <div style={{ fontSize: '10.5px', color: 'var(--muted)' }}>{r.timestamp}</div>
+                  </div>
+                ),
+              },
+              {
+                key: 'user',
+                label: 'User',
+                render: (r) => (
+                  <div>
+                    <strong style={{ color: 'var(--text)' }}>{r.user}</strong>
+                    {r.groups && r.groups.length > 0 && (
+                      <div style={{ fontSize: '10.5px', color: 'var(--muted)' }}>
+                        {r.groups.slice(0, 2).join(', ')}
+                        {r.groups.length > 2 && ` +${r.groups.length - 2}`}
+                      </div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'verb',
+                label: 'Verb',
+                render: (r) => getVerbBadge(r.verb),
+              },
+              {
+                key: 'resource',
+                label: 'Resource',
+                render: (r) => (
+                  <div>
+                    <strong className="mono" style={{ fontSize: '12px' }}>{r.resource || '—'}</strong>
+                    {r.apiGroup && (
+                      <div style={{ fontSize: '10.5px', color: 'var(--muted)' }}>{r.apiGroup}</div>
+                    )}
+                  </div>
+                ),
+              },
+              {
+                key: 'namespace',
+                label: 'Namespace',
+                render: (r) => (
+                  r.namespace ? (
+                    <Badge tone="purple">{r.namespace}</Badge>
+                  ) : (
+                    <span style={{ color: 'var(--muted)', fontSize: '12px' }}>cluster-scoped</span>
+                  )
+                ),
+              },
+              {
+                key: 'resourceName',
+                label: 'Resource Name',
+                render: (r) => (
+                  <span className="mono" style={{ fontSize: '12px', color: r.resourceName ? 'var(--teal)' : 'var(--muted)' }}>
+                    {r.resourceName || '—'}
+                  </span>
+                ),
+              },
+              {
+                key: 'status',
+                label: 'Status',
+                render: (r) => {
+                  const isAllowed = r.allowed !== undefined ? r.allowed : r.status === 'allowed';
+                  const code = r.statusCode || r.responseStatus || 200;
+                  return (
+                    <span className={`audit-status-badge ${isAllowed ? 'allowed' : 'denied'}`}>
+                      <span className="badge-dot" />
+                      {isAllowed ? `Allowed (${code})` : `Denied (${code})`}
+                    </span>
+                  );
+                },
+              },
+            ]}
+          />
+
+          <div className="audit-pagination">
+            <div>
+              Showing <strong>{total === 0 ? 0 : offset + 1}</strong> to <strong>{Math.min(offset + limit, total)}</strong> of <strong>{total}</strong> activities
+            </div>
+            <div className="audit-pagination-controls">
+              <select
+                className="select"
+                style={{ height: '28px', padding: '0 6px', fontSize: '11px', minWidth: '75px' }}
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setOffset(0); }}
+              >
+                <option value={25}>25 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+              <button
+                className="button subtle small"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+              >
+                Previous
+              </button>
+              <button
+                className="button subtle small"
+                disabled={offset + limit >= total}
+                onClick={() => setOffset(offset + limit)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+
 function Troubleshooting() {
   console.log("[TROUBLESHOOTING DEBUG] TroubleshootingPage rendered");
   const resource = useResource(api.troubleshooting); const groups = resource.data || {}; return <><PageHeader eyebrow="Observability" title="Troubleshooting" description="Actionable issues grouped by severity from backend diagnostics." action={<button className="button subtle" onClick={resource.reload}><RefreshCw size={16} /> Refresh</button>} />{resource.loading ? <Loading /> : resource.error ? <ErrorState error={resource.error} reload={resource.reload} /> : <div className="diagnostic-grid">{['critical', 'warning', 'info'].map((severity) => <section className="panel" key={severity}><div className="panel-head"><h2>{severity}</h2><Badge tone={severity === 'critical' ? 'danger' : severity === 'warning' ? 'warning' : 'info'}>{groups[severity]?.length || 0}</Badge></div>{groups[severity]?.length ? <div className="issue-list">{groups[severity].map((issue, i) => <div className="issue" key={i}><div><strong>{issue.resourceName}</strong><span>{issue.message}</span><small>{issue.recommendation}</small></div></div>)}</div> : <Empty title={`No ${severity} issues`} text="No diagnostics were returned in this category." />}</section>)}</div>}</>; }
@@ -5376,7 +5836,14 @@ function App() {
   const status = useResource(api.status, [currentCluster]);
 
   const handleClusterChange = (newClusterId) => {
-    setCurrentCluster(newClusterId);
+    const canonicalId = typeof newClusterId === 'object' && newClusterId !== null
+      ? newClusterId.id
+      : typeof newClusterId === 'string' && newClusterId.includes(',')
+      ? newClusterId.split(',')[0].trim()
+      : typeof newClusterId === 'string'
+      ? newClusterId.trim()
+      : newClusterId;
+    setCurrentCluster(canonicalId);
     setSelected(null);
   };
 
@@ -5403,6 +5870,7 @@ function App() {
   const isRBAC = page === 'rbac' || page === 'serviceaccount' || page === 'serviceaccounts' || page === 'role' || page === 'roles' || page === 'rolebinding' || page === 'rolebindings' || page === 'clusterrole' || page === 'clusterroles' || page === 'clusterrolebinding' || page === 'clusterrolebindings';
   const isOperators = page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd';
   const isEvents = page === 'events' || page === 'event';
+  const isAudit = page === 'audit' || page === 'audits';
   const isTroubleshooting = page === 'troubleshooting';
 
   const title = isStorage
@@ -5413,6 +5881,8 @@ function App() {
     ? 'Troubleshooting'
     : isOperators
     ? 'Operators & CRDs'
+    : isAudit
+    ? 'Audit & Activity'
     : isEvents
     ? 'Events'
     : isIngress
@@ -5453,6 +5923,8 @@ function App() {
     ? <OperatorsView key={currentCluster} onSelectCRD={(crd) => setSelected({ type: 'crd', value: crd })} />
     : isEvents
     ? <Events key={currentCluster} />
+    : isAudit
+    ? <AuditView key={currentCluster} currentCluster={currentCluster} onSelectEvent={(ev) => setSelected({ type: 'audit', value: ev })} />
     : isNodes
     ? <Nodes key={currentCluster} onSelect={(node) => setSelected({ type: 'node', value: node })} />
     : isNamespaces
@@ -5497,6 +5969,7 @@ function App() {
     if (key === 'rbac' && (page === 'rbac' || page === 'serviceaccount' || page === 'serviceaccounts' || page === 'role' || page === 'roles' || page === 'rolebinding' || page === 'rolebindings' || page === 'clusterrole' || page === 'clusterroles' || page === 'clusterrolebinding' || page === 'clusterrolebindings')) return true;
     if (key === 'operators' && (page === 'operators' || page === 'operator' || page === 'crds' || page === 'crd')) return true;
     if (key === 'events' && (page === 'events' || page === 'event')) return true;
+    if (key === 'audit' && (page === 'audit' || page === 'audits')) return true;
     if (key === 'troubleshooting' && page === 'troubleshooting') return true;
     return page === key;
   };
@@ -5679,6 +6152,12 @@ function App() {
           crd={selected.value.crd}
           instance={selected.value.instance}
           onClose={() => setSelected({ type: 'crd', value: selected.value.crd })}
+        />
+      )}
+      {selected?.type === 'audit' && (
+        <AuditDetail
+          event={selected.value}
+          onClose={() => setSelected(null)}
         />
       )}
     </div>

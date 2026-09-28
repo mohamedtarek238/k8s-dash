@@ -26,6 +26,7 @@ const rbacRoutes = require('./rbac.routes');
 const metricsRoutes = require('./metrics.routes');
 const jobsRoutes = require('./jobs.routes');
 const cronJobsRoutes = require('./cronjobs.routes');
+const auditRoutes = require('./audit.routes');
 
 const router = express.Router();
 
@@ -71,6 +72,7 @@ router.use('/cronjob', cronJobsRoutes);
 router.use('/health', healthRoutes);
 router.use('/troubleshooting', troubleshootingRoutes);
 router.use('/resources', resourcesRoutes);
+router.use('/audit', auditRoutes);
 
 module.exports = router;
 
