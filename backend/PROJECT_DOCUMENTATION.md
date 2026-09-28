@@ -64,8 +64,20 @@ If `.env` is absent, the application defaults to port `5000`.
 |---|---|---|
 | `start` | `node src/server.js` | Start the production-style process |
 | `dev` | `node --watch src/server.js` | Start with automatic restarts when files change |
+| `test` | `node test/audit.test.js && node test/auth.test.js` | Run backend test suites (Audit & Auth) |
+| `create-user` | `node src/scripts/create-user.js` | Interactively create a dashboard user |
+| `reset-password` | `node src/scripts/reset-password.js` | Interactively reset a user's password |
 
-There is currently no test, lint, build, or coverage script in `package.json`.
+### User Management and Authentication
+
+The dashboard uses a secure, file-based authentication system storing data in `users.json`.
+- Passwords are **never** stored in plaintext. The system uses one-way `bcrypt` hashing.
+- Passwords cannot be decrypted or revealed once set.
+- Authentication tokens use stateless JWTs.
+
+#### CLI Commands
+- `npm run create-user`: Interactively asks for a username, hidden password, and role (`admin` or `viewer`). Rejects duplicate usernames and saves the new user's `bcrypt` hash.
+- `npm run reset-password`: Interactively asks for an existing username and a new hidden password (with confirmation). It safely updates only the `bcrypt` password hash for that user, preserving the user's existing ID and role. It does not reveal the old password or store the new password in plaintext.
 
 ## 4. Configuration
 
@@ -1065,7 +1077,99 @@ npm test
 ```
 Covers all 12 core scenarios: valid JSON, multiline parsing, malformed line recovery, empty file detection, missing file handling, permission denied verification, namespace filtering, verb filtering, user filtering, status filtering, pagination limits/offsets, and sensitive data sanitization.
 
-## 29. License
+## 29. Create a user
+
+The dashboard uses a secure, file-based authentication system stored in `users.json` (`data/users.json`). Passwords are never stored in plaintext or reversible encryption; only one-way bcrypt hashes are retained.
+
+### 29.1 CLI User Creation Command
+
+To interactively create a new dashboard user, run:
+
+```bash
+npm run create-user
+```
+
+This launches the interactive script at [`src/scripts/create-user.js`](file:///d:/k8s/backend/src/scripts/create-user.js).
+
+### 29.2 Interactive Prompts & Parameters
+
+When executed in a terminal, the script interactively prompts:
+
+```text
+==================================================
+ Kubernetes Dashboard - Secure User Creation CLI
+==================================================
+Username: ahmed
+Password: [hidden]
+Role (admin, viewer) [viewer]: viewer
+
+[SUCCESS] User "ahmed" created successfully!
+User Details:
+  - ID: 3
+  - Username: ahmed
+  - Role: viewer
+  - Password Hash: $2b$12$N9/v... [One-way Bcrypt Hash]
+  - Stored in: data/users.json
+==================================================
+```
+
+#### Script features:
+- **Interactive Prompting**: Prompts for `Username:`, `Password:`, and `Role:`.
+- **Masked / Hidden Password Entry**: When run in an interactive TTY, each keystroke entered for the password is masked (or hidden) to prevent shoulder surfing. Passwords are never echoed in cleartext and never logged.
+- **CLI Argument Support**: For automation/CI, options can also be provided directly via arguments or flags:
+  ```bash
+  node src/scripts/create-user.js --username myadmin --password secret --role admin
+  ```
+- **Validation**:
+  - **Username**: Must be non-empty and at least 3 characters. Duplicate usernames (case-insensitive) are strictly prevented.
+  - **Password**: Must be at least 6 characters in length.
+  - **Role**: Must be either `admin` or `viewer`. Defaults to `viewer` if empty in interactive mode.
+
+### 29.3 Supported Roles
+
+The dashboard enforces role-based access control (RBAC):
+
+| Role | Permissions |
+|---|---|
+| `admin` | Full administrative access: view all clusters and resources, execute commands in pod web terminals, scale workloads, delete/edit resources. |
+| `viewer` | Read-only access: view dashboard, clusters, nodes, workloads, metrics, logs, events, and audit logs. Mutation and terminal operations are restricted. |
+
+### 29.4 Password Security Architecture
+
+- **One-Way Hashing**: Passwords are securely hashed using `bcryptjs` with a cost factor (salt rounds) of `12`.
+- **Strictly No Plaintext**: Passwords are never written to disk, logs, or response payloads in plaintext.
+- **Irreversible**: bcrypt is a one-way mathematical trapdoor function. Passwords cannot be decrypted or recovered under any circumstances.
+- **Forgot Password Policy**: If a user forgets their password, their password cannot be retrieved. An administrator must run `npm run create-user` or update their entry with a newly generated bcrypt hash.
+- **Constant-Time Comparison**: Authentication uses `bcrypt.compare()` with dummy hash fallback for non-existent users to defend against timing attacks.
+
+### 29.5 Authentication API
+
+The backend exposes the following authentication endpoints:
+
+- `POST /api/auth/login` (also aliased as `POST /api/login`):
+  - Request body: `{ "username": "admin2", "password": "securepassword" }`
+  - Validates credentials using `bcrypt.compare(password, user.passwordHash)`.
+  - On success: Returns `200 OK` with a signed JWT (`token`), user profile (`id`, `username`, `role`), and expiration time.
+  - On failure: Returns `401 Unauthorized` (`{ "success": false, "error": { "message": "Invalid username or password" } }`).
+- `GET /api/auth/me`:
+  - Header: `Authorization: Bearer <token>`
+  - Returns authenticated user details and active role.
+
+### 29.6 Automated Testing
+
+Unit and integration tests for authentication and user creation are included in the test suite:
+
+```bash
+# Run both audit and auth tests
+npm test
+
+# Run auth tests only
+node test/auth.test.js
+```
+
+Covers automatic `users.json` creation, security & hashing verification, user creation & preservation, duplicate prevention, role validation, masked CLI execution, login verification, 401 handling, and JWT token issuance.
+
+## 30. License
 
 The project declares the MIT license in `package.json`.
 

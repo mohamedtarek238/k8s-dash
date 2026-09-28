@@ -27,6 +27,9 @@ const metricsRoutes = require('./metrics.routes');
 const jobsRoutes = require('./jobs.routes');
 const cronJobsRoutes = require('./cronjobs.routes');
 const auditRoutes = require('./audit.routes');
+const authRoutes = require('./auth.routes');
+const authController = require('../controllers/auth.controller');
+const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
 
@@ -73,6 +76,8 @@ router.use('/health', healthRoutes);
 router.use('/troubleshooting', troubleshootingRoutes);
 router.use('/resources', resourcesRoutes);
 router.use('/audit', auditRoutes);
+router.use('/auth', authRoutes);
+router.post('/login', asyncHandler(authController.login));
 
 module.exports = router;
 

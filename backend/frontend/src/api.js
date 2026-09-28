@@ -49,16 +49,74 @@ function appendClusterParam(path) {
   return queryStr ? `${pathname}?${queryStr}` : pathname;
 }
 
+const TOKEN_KEY = 'k8s-dashboard-token';
+const USER_KEY = 'k8s-dashboard-user';
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || null;
+}
+
+function setToken(token) {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
+function getUser() {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setUser(user) {
+  if (user) {
+    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  } else {
+    localStorage.removeItem(USER_KEY);
+  }
+}
+
+function clearAuth() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  window.dispatchEvent(new CustomEvent('auth:logout'));
+}
+
 async function request(path, options = {}) {
   const fullPath = appendClusterParam(path);
+  const token = getToken();
+  const headers = {
+    Accept: 'application/json',
+    ...(options.headers || {}),
+  };
+
+  if (token && !headers['Authorization'] && !headers['authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_URL}${fullPath}`, {
-    headers: { Accept: 'application/json', ...(options.headers || {}) },
     ...options,
+    headers,
   });
 
   const payload = await response.json().catch(() => ({}));
+
+  if (response.status === 401 && !path.includes('/auth/login') && !path.includes('/login')) {
+    clearAuth();
+    window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+  }
+
   if (!response.ok || payload.success === false) {
-    const error = new Error(payload.message || payload.error || `Request failed with ${response.status}`);
+    const msg = (payload.error && typeof payload.error === 'object' && payload.error.message)
+      || (typeof payload.error === 'string' && payload.error)
+      || payload.message
+      || `Request failed with ${response.status}`;
+    const error = new Error(msg);
     error.status = response.status;
     error.details = payload.details;
     throw error;
@@ -74,6 +132,35 @@ export const api = {
   url: API_URL,
   setCluster,
   getCluster,
+  auth: {
+    login: async (username, password) => {
+      const payload = await request('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const { token, user } = payload.data || {};
+      if (token) setToken(token);
+      if (user) setUser(user);
+      window.dispatchEvent(new CustomEvent('auth:login', { detail: { user } }));
+      return { token, user };
+    },
+    logout: () => {
+      clearAuth();
+    },
+    me: async () => {
+      const payload = await request('/api/auth/me');
+      const user = payload.data?.user || payload.data;
+      if (user) setUser(user);
+      return user;
+    },
+    getToken,
+    setToken,
+    getUser,
+    setUser,
+    isAuthenticated: () => !!getToken(),
+    clearAuth,
+  },
   clusters: () => list('/api/clusters'),
   status: () => data('/api/status'),
   cluster: () => data('/api/cluster'),

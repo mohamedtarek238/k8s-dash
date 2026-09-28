@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "username": "admin2",
+    "passwordHash": "$2b$12$U3lQO1A8s/.hSOD182bXJOM/FpaGpfUVCxRDTcVvukR1EzSiHpGkq",
+    "role": "admin"
+  },
+  {
+    "id": 2,
+    "username": "testuser",
+    "passwordHash": "$2b$12$SHWtOtbgZga/tKwqYT.hkuQfeDJuUEoS1BtwA32vidqPg5y4sEw8u",
+    "role": "viewer"
+  },
+  {
+    "id": 3,
+    "username": "ahmed",
+    "passwordHash": "$2b$12$h17P9Cg7XzQO0RijcOQ0cuUVkMZ87iC2Iidd9rDbD/CcCPIbiXKPW",
+    "role": "viewer"
+  },
+  {
+    "id": 4,
+    "username": "operator1",
+    "passwordHash": "$2b$12$63CvMwL.EeKVu3KGaqmUE.9Oiaq/mPULQ7DvzHfqVA54510sPR8rG",
+    "role": "viewer"
+  }
+]

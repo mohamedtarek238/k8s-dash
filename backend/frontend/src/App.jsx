@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowDown, Blocks, Box, Calendar, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDot, Clock, Copy, Cpu, Database,
-  ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, Menu, Moon, Network,
+  ExternalLink, FileCode, FileText, Gauge, Globe, HardDrive, Layers3, LayoutDashboard, LogOut, Menu, Moon, Network,
   Package, PanelLeftClose, PanelLeftOpen, Play, RefreshCw, Route, Search, Server, Settings2, Shield, ShieldAlert, Sun, Terminal,
   X, Zap
 } from 'lucide-react';
@@ -9,6 +9,7 @@ import {
 import { api } from './api';
 import { formatMemoryQuantity, formatStorageQuantity, formatCpuQuantity } from './formatters';
 import { PodTerminal } from './components/PodTerminal';
+import { LoginPage } from './components/LoginPage';
 
 const nav = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -5800,12 +5801,38 @@ function getPageFromLocation() {
 }
 
 function App() {
+  const [currentUser, setCurrentUser] = useState(() => api.auth.getUser());
   const [page, setPage] = useState(getPageFromLocation);
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('k8s-dashboard-theme');
     if (saved !== null) return saved === 'dark';
     return true;
   });
+
+  useEffect(() => {
+    const handleLogin = (e) => setCurrentUser(e.detail?.user || api.auth.getUser());
+    const handleLogout = () => setCurrentUser(null);
+    const handleUnauthorized = () => setCurrentUser(null);
+
+    window.addEventListener('auth:login', handleLogin);
+    window.addEventListener('auth:logout', handleLogout);
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+
+    if (api.auth.isAuthenticated()) {
+      api.auth.me().then((verifiedUser) => {
+        if (verifiedUser) setCurrentUser(verifiedUser);
+      }).catch(() => {
+        api.auth.clearAuth();
+        setCurrentUser(null);
+      });
+    }
+
+    return () => {
+      window.removeEventListener('auth:login', handleLogin);
+      window.removeEventListener('auth:logout', handleLogout);
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('k8s-dashboard-theme', dark ? 'dark' : 'light');
@@ -5834,6 +5861,16 @@ function App() {
   }, []);
 
   const status = useResource(api.status, [currentCluster]);
+
+  if (!currentUser || !api.auth.isAuthenticated()) {
+    return (
+      <LoginPage
+        onLoginSuccess={(user) => setCurrentUser(user)}
+        dark={dark}
+        onToggleTheme={() => setDark(!dark)}
+      />
+    );
+  }
 
   const handleClusterChange = (newClusterId) => {
     const canonicalId = typeof newClusterId === 'object' && newClusterId !== null
@@ -6030,6 +6067,29 @@ function App() {
             <button className="icon-button" title="Settings">
               <Settings2 size={17} />
             </button>
+            {currentUser && (
+              <div className="topbar-user-section">
+                <div className="topbar-user-badge" title={`Signed in as ${currentUser.username} (${currentUser.role})`}>
+                  <div className="topbar-user-avatar">
+                    {currentUser.username ? currentUser.username[0].toUpperCase() : 'U'}
+                  </div>
+                  <span className="topbar-username">{currentUser.username}</span>
+                  <span className={`topbar-role-tag ${currentUser.role === 'admin' ? 'admin' : 'viewer'}`}>
+                    {currentUser.role}
+                  </span>
+                </div>
+                <button
+                  className="topbar-logout-btn"
+                  title="Sign Out"
+                  onClick={() => {
+                    api.auth.logout();
+                    setCurrentUser(null);
+                  }}
+                >
+                  <LogOut size={15} />
+                </button>
+              </div>
+            )}
           </div>
         </header>
         <div className="content">{content}</div>
